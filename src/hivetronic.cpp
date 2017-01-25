@@ -1,0 +1,925 @@
+
+/*
+ *****************************************************************************
+    Hive monitor program using HX711 and LoRa transceiver
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with the program.  If not, see <http://www.gnu.org/licenses/>.
+
+ *****************************************************************************
+ */
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// INCLUDES
+#include "hivetronic.h"
+
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// GLOBAL CONFIGURATIONS
+#define DEBUG_HIVETRONIC
+#define DEBUG_HX711
+#define STM32_RTC
+#define LORA_ENABLED_N
+#define WFI
+#define ADC_POWER_OPTIM
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// GLOBAL VARIABLES
+
+DHT dht(DHTPIN, DHTTYPE);
+float weight[4] = {0};
+HX711 adcFrontLeft, adcFrontRight, adcRearLeft, adcRearRight;
+int loraMode = LORAMODE;
+uint32_t seq = 0;
+uint32_t inactiveDuration = LORA_REPORTING_PERIOD-PROCESSING_DURATION;
+RTC_HandleTypeDef hrtc;
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Setup function
+
+void setup() {
+	// Set clock config
+	// SYSCLK = 48MHz from MSI
+	// AHB = 1MHz
+	// APB = 1MHz
+
+	// Open serial communications and wait for port to open:
+	Serial.begin(38400);
+	delay(100);
+	// Print a start message
+#ifdef DEBUG_HIVETRONIC
+	printf("\r\n\r\n");
+	printf("////////////////////////////////////\r\n");
+	printf("\r\n");
+	printf("Hive monitor using HX711 and LoRa\r\n");
+	printf("ARM (STM32)\r\n");
+#endif /* DEBUG_HIVETRONIC */
+	configureClock();
+	initDHT();
+	initADC();
+	initRTC();
+#ifdef LORA_ENABLED
+	initLoRa();
+#endif
+
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// Loop function
+
+void loop(void)
+{
+	uint32_t r_size;
+	int ret;
+	uint8_t message[100]={0}, AckMessage[100]={0};
+	AckData_t gwAckData;
+	uint8_t AckSize;
+	float Temp = NAN;
+	float Hum = NAN;
+	float Weight = NAN;
+	tm time;
+	char cDateTime[26];
+	// FIX THIS - Is it really needed ???
+	// sx1272.CarrierSense();
+	// END OF FIX THIS
+	sx1272.setPacketType(PKT_TYPE_DATA);
+	while (1) {
+#ifdef DEBUG_HIVETRONIC
+		printf("\r\n");
+		printf("////////////////////////////////////\r\n");
+#endif /* DEBUG_HIVETRONIC */
+		// measure temperature
+		measureTempHum(&Temp, &Hum);
+		measureHX711(&Weight);
+		adjustWeight(&Weight, Temp);
+		getRTCDateTime(&time);
+		sprintf(cDateTime, "%02d/%02d/%4d-%02d:%02d:%02d",
+				time.tm_mday,
+				time.tm_mon,
+				(time.tm_year+1900),
+				time.tm_hour,
+				time.tm_min,
+				time.tm_sec);
+    	String strT(Temp, 2);
+    	String strH(Hum, 2);
+    	String strW(Weight, 3);
+    	String strSeq(seq, 10);
+    	String strTime(cDateTime);
+    	String messageData;
+
+      	messageData = strTime + " - Seq: " + strSeq + " - T=" + strT + " - H=" + strH + " - W=" + strW;
+    	r_size = strlen(messageData.c_str());
+    	for (uint32_t i = 0; i < r_size; i++) {
+			message[i] = (uint8_t) messageData.c_str()[i];
+		}
+    	message[r_size]='\r';
+    	message[r_size+1]='\n';
+#ifdef DEBUG_HIVETRONIC
+    	printf("\nSending Message (length=%d) : %s\r\n", (int)r_size,message);
+#endif /* DEBUG_HIVETRONIC*/
+		seq++;
+	    ret = sx1272.sendPacketTimeoutACK(DEFAULT_DEST_ADDR, message, r_size);
+#ifdef DEBUG_HIVETRONIC
+	    printf("Packet sent, state %d\r\n", ret);
+	    if (ret == 3)
+			printf("No Ack!\r\n");
+		if (ret == 0)
+			printf("Ack received from gateway!\r\n");
+#endif /* DEBUG_HIVETRONIC*/
+		if (ret==0) {
+			sx1272.getAckPacket(DEFAULT_DEST_ADDR, AckMessage, &AckSize);
+			handleAckData(AckMessage, &AckSize, &gwAckData);
+		}
+		//delay(inactiveDuration);
+		enterLowPower(PM_SLEEP, inactiveDuration);
+	}
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////////////
+// FUNCTIONS IMPLEMENTATION
+#define NEW_WFI_N
+
+uint32_t delay_WFI(uint32_t duration_ms) {
+#ifdef NEW_WFI
+	uint32_t ret=ERROR_WFI, savedLatency, newLatency;
+	uint32_t savedSysclk;
+	uint32_t savedSysTickCTRL, savedSysTickLOAD, savedSysTickVAL, savedSysTickCALIB;
+	uint32_t newSysTickLOAD;
+	RCC_ClkInitTypeDef savedClkConfig, newClkConfig;
+	RCC_OscInitTypeDef SavedOscConfig, newOscConfig;
+	RCC_PeriphCLKInitTypeDef savedPeriphClkConfig, newPerighClkConfig;
+
+	/* Save context */
+	savedSysTickCTRL = SysTick->CTRL;
+	savedSysTickLOAD = SysTick->LOAD;
+	savedSysTickVAL = SysTick->VAL;
+	savedSysTickCALIB = SysTick->CALIB;
+	HAL_RCC_GetClockConfig(&savedClkConfig, &savedLatency);
+	HAL_RCC_GetOscConfig(&SavedOscConfig);
+
+	/* Set new clocks configuration to enable LPSLEEP mode */
+	HAL_SuspendTick();
+	newOscConfig.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
+	newOscConfig.LSEState = RCC_LSE_ON;
+	newOscConfig.MSIState = RCC_MSI_ON;
+	newOscConfig.MSIClockRange = RCC_MSIRANGE_4; /* MSI at 1MHz */
+	newOscConfig.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+	newOscConfig.PLL.PLLState = RCC_PLL_OFF;
+	newClkConfig.ClockType = (RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2);
+	newClkConfig.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+	newClkConfig.AHBCLKDivider = RCC_SYSCLK_DIV512;
+	newClkConfig.APB1CLKDivider = RCC_HCLK_DIV16;
+	newClkConfig.APB2CLKDivider = RCC_HCLK_DIV16;
+	newLatency = FLASH_LATENCY_0;
+	//HAL_RCC_GetClockConfig(&newClkConfig, &newLatency); /* Switch from PLL to MSI */
+	//HAL_RCC_GetOscConfig(&newOscConfig); /* then, switch off PLL */
+	//HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE2); /* Switch to low power regulator */
+
+	/* Set SysTick for sleep duration in ticks number */
+	newSysTickLOAD = savedSysTickLOAD*duration_ms; /* FIX MAX DURATION */
+	HAL_SYSTICK_Config(newSysTickLOAD); /* FIX THE PARAMETER */
+
+	/* enter WaitForInterrupt */
+	__WFI();
+
+	/* Restore context */
+	HAL_SuspendTick();
+	//HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1); /* Switch to main regulator */
+	//HAL_RCC_OscConfig(&SavedOscConfig); /* start PLL */
+	//HAL_RCC_ClockConfig(&savedClkConfig, savedLatency); /* switch from MSI to PLL */
+	HAL_SYSTICK_Config(savedSysTickLOAD); /* FIX THE PARAMETER */
+
+
+	return ret;
+#else /* NEW_WFI */
+	/* duration_ms is in milliseconds */
+	/* FIX THIS : only works with AHB clock = 64MHz */
+	/* TIM5_PSC = 0x3F - Fck_cnt=Fahb/64=1MHz */
+	/* TIM5_ARR = 0x3E7 - Ftim5=Fck_cnt/1000=1KHz */
+	uint32_t tim5_reload, systick_csr;
+	uint32_t ret=ERROR_WFI;
+	if (duration_ms<(0xFFFFFFFF/1000)) {
+		tim5_reload= duration_ms*1000;
+		TIM5_CR1 &= 0xFFFFFFFE;
+		TIM5_ARR=tim5_reload;
+		TIM5_CR1 |= 0x01;
+		systick_csr = SYST_CSR;
+		SYST_CSR &=0xFFFFFFFD;
+    	__WFI();
+		TIM5_CR1 &= 0xFFFFFFFE;
+		TIM5_ARR=0x000003E7;
+		TIM5_CR1 |= 0x01;
+		SYST_CSR = systick_csr;
+		ret = NO_ERROR;
+	}
+	return ret;
+#endif /* NEW_WFI */
+}
+
+uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
+	tm time, alarm;
+	getRTCDateTime(&time);
+	addDateTime(&alarm, time, duration);
+	setAlarm(alarm);
+#ifdef DEBUG_HIVETRONIC
+	printf("Alarm set: %02d:%02d:%02d\r\n", alarm.tm_hour, alarm.tm_min, alarm.tm_sec);
+#endif /* DEBUG_HIVETRONIC */
+  if (mode==PM_RUN1) {
+		while ((RTC_ISR&0x00000100)!=0x00000100) {
+			// wait for alarm flag
+		}
+#ifdef DEBUG_HIVETRONIC
+		printf("Alarm fired - flag set RTC_ISR = %lX\r\n", RTC_ISR);
+#endif /* DEBUG_HIVETRONIC */
+		RTC_WPR = 0xCA;
+		RTC_WPR = 0x53;
+		delay(50);
+		// clear ALRAE to disable Alarm A
+		RTC_CR &= 0x00000100;
+		// clear ALARAF flag
+		RTC_ISR &= ~0x00000100;
+	}
+	if (mode==PM_SLEEP) {
+#ifdef DEBUG_HIVETRONIC
+		printf("WFI entry ...\r\n");
+#endif /* DEBUG_HIVETRONIC */
+		delay(10);
+		delay_WFI(duration*1000);
+		while ((RTC_ISR&0x00000100)!=0x00000100) {
+			// wait for alarm flag
+#ifdef DEBUG_HIVETRONIC
+			printf("wait RTC_ISR ALARAF\r\n");
+#endif /* DEBUG_HIVETRONIC */
+			delay(1000);
+		}
+#ifdef DEBUG_HIVETRONIC
+		printf("\t... WFI exit\r\n");
+#endif /* DEBUG_HIVETRONIC */
+		RTC_WPR = 0xCA;
+		RTC_WPR = 0x53;
+		delay(50);
+		// clear ALRAE to disable Alarm A
+		RTC_CR &= ~0x00000100;
+		// clear ALARAF flag
+		RTC_ISR &= ~0x00000100;
+	}
+	if (mode==PM_LPSLEEP) {
+#ifdef DEBUG_HIVETRONIC
+		printf("LP Sleep entry ...\r\n");
+		printf("\t... LP Sleep exit\r\n");
+#endif /* DEBUG_HIVETRONIC */
+	}
+	return NO_ERROR;
+}
+
+uint32_t configureClock(void) {
+	uint32_t ret=NO_ERROR;
+	// set SYSCLK
+	//RCC_CR &= ˜0xFFFFFF0F;
+	//RCC_CR |= =0x0000005F, // MSI range: 2MHz
+	RCC_PLLSAI1CFGR = 0x00000000;
+	RCC_PLLSAI2CFGR = 0x00000000;
+	// set Cortex-M4 SysTick
+	// set Range 2 voltage
+    RCC_APB1ENR1 |= 0x10000000;
+	//PWR_CR1 = 0x00004700;
+	return ret;
+}
+
+
+uint32_t addDateTime(tm* endtime, tm starttime, uint32_t duration) {
+	/* duration is in seconds */
+	uint32_t hour, min, sec, carry;
+	hour = (uint32_t) (duration/3600);
+	min = (uint32_t) ((duration/60)%60);
+	sec = (uint32_t) (duration%60);
+	endtime->tm_sec = starttime.tm_sec + sec;
+	carry = 0;
+	if (endtime->tm_sec>59) {
+		// add one minute
+		endtime->tm_sec = endtime->tm_sec-60;
+		carry=1;
+	}
+	endtime->tm_min = starttime.tm_min + min + carry;
+	carry = 0;
+	if (endtime->tm_min>59) {
+		// add one minute
+		endtime->tm_min = endtime->tm_min-60;
+		carry=1;
+	}
+	endtime->tm_hour = starttime.tm_hour + hour + carry;
+	if (endtime->tm_hour>23) {
+		// add one minute
+		endtime->tm_hour = endtime->tm_hour-24;
+		carry=1;
+	}
+	return NO_ERROR;
+}
+
+uint32_t setAlarm(tm alrm) {
+	uint8_t st, su, mnt, mnu, ht, hu;
+	//uint8_t dt, du, mt, mu, wdu, yt, yu;
+	st = (uint8_t) decimal_to_bcd((uint8_t)(alrm.tm_sec/10));
+	su = (uint8_t) decimal_to_bcd((uint8_t)(alrm.tm_sec - 10*st));
+	mnt = (uint8_t) decimal_to_bcd((uint8_t)(alrm.tm_min/10));
+	mnu = (uint8_t)	decimal_to_bcd((uint8_t)(alrm.tm_min - 10*mnt));
+	ht = (uint8_t) decimal_to_bcd((uint8_t)(alrm.tm_hour/10));
+	hu = (uint8_t) decimal_to_bcd((uint8_t)(alrm.tm_hour - 10*ht));	// remove write protection
+	RTC_WPR = 0xCA;
+	RTC_WPR = 0x53;
+	while ((RTC_ISR&0x00000001)!=0x00000001) {
+		// wait for ALARAWF set
+	}
+	// clear ALRAE to disable Alarm A
+	RTC_CR &= ~0x00000100;
+	// clear ALARAF flag
+	RTC_ISR &= ~0x00000100;
+	// set alarm hour:min:sec
+	RTC_ALARMAR = ht<<20 | hu<<16 | mnt<<12 | mnu<<8 | st<<4 | su;
+	// date mask doesn't care
+	RTC_ALARMAR |= 0x80000000;
+	// set ALRAE to enable Alarm A
+	RTC_CR |= 0x00000100;
+	// reactivate write protection
+	RTC_WPR = 0xDE;
+	RTC_WPR = 0xAD;
+	return NO_ERROR;
+}
+
+
+uint32_t setRTCDateTime(tm time) {
+#ifndef RTC_HAL
+	uint8_t st, su, mnt, mnu, ht, hu, dt, du, mt, mu, wdu, yt, yu;
+	// remove write protection
+	RTC_WPR = 0xCA;
+	RTC_WPR = 0x53,
+	delay(50);
+	// Set INIT bit to 1 in the RTC_ISR register to enter initialization mode
+	RTC_ISR |= 0x80;
+	// Poll INITF bit of in the RTC_ISR register.
+	while((RTC_ISR & 0x40)!=0x40) {
+	    // The initialization phase mode is entered when INITF is set to 1 (takes 2RTCCLK)
+	}
+
+	RTC_PRER = 0x007F00FF;
+
+	// Load the initial time and date values in the shadow registers (RTC_TR and RTC_DR)
+	st = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_sec/10));
+	su = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_sec - 10*st));
+	mnt = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_min/10));
+	mnu = (uint8_t)	decimal_to_bcd((uint8_t)(time.tm_min - 10*mnt));
+	ht = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_hour/10));
+	hu = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_hour - 10*ht));
+	dt = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_mday/10));
+	du = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_mday - 10*dt));
+	mt = (uint8_t) decimal_to_bcd((uint8_t)((time.tm_mon+1)/10)); /* need to correct month (from 0 to 11) */
+	mu = (uint8_t) decimal_to_bcd((uint8_t)((time.tm_mon+1) - 10*mt));
+	wdu = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_wday));
+	yt = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_year/10));
+	yu = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_year - 10*yt));
+  	if (dt<3) {
+  		RTC_TR = ht<<20 | hu<<16 | mnt<<12 | mnu<<8 | st<<4 | su;
+  		/* FIX THIS: month not handle correctly */
+		RTC_DR = yt<<20 | yu<<16 | wdu<<13 | mt << 12 | mu<<8 | dt<<4 | du;
+		// configure the time format (24 hours) through the FMT bit in the RTC_CR register
+		RTC_CR &= 0xFFFFFFBF;
+	} else {
+#ifdef DEBUG_HIVETRONIC
+		printf("\tWrong date/time\r\n");
+#endif /* DEBUG_HIVETRONIC*/
+	}
+	// Exit the initialization mode by clearing the INIT bit
+	RTC_ISR &= 0xFFFFFF7F;
+	// reactivate write protection
+	RTC_WPR = 0xDE;
+	RTC_WPR = 0xAD;
+	delay(50);
+	return NO_ERROR;
+#else /* 0 */
+	RTC_TimeTypeDef sTime;
+	RTC_DateTypeDef sDate;
+	sTime.Seconds = time.tm_sec;
+	sTime.Minutes = time.tm_min;
+	sTime.Hours = time.tm_hour;
+	sDate.Date = time.tm_mday;
+	sDate.Month = time.tm_mon + 1;
+	sDate.Year = time.tm_year - 100;
+	if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BIN) != HAL_OK) {
+	  Error_Handler(ERROR_SETDATE);
+	}
+	if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN) != HAL_OK) {
+	  Error_Handler(ERROR_SETDATE);
+	}
+#endif
+	return NO_ERROR;
+}
+
+uint32_t getRTCDateTime(tm* time) {
+#ifndef RTC_HAL
+	RTC_TimeTypeDef sTime;
+	RTC_DateTypeDef sDate;
+	if (HAL_RTC_GetDate(&hrtc, &sDate, RTC_FORMAT_BIN) != HAL_OK) {
+	  Error_Handler(ERROR_GETDATE);
+	}
+	if (HAL_RTC_GetTime(&hrtc, &sTime, RTC_FORMAT_BIN) != HAL_OK) {
+	  Error_Handler(ERROR_GETTIME);
+	}
+	time->tm_sec = sTime.Seconds;
+	time->tm_min = sTime.Minutes;
+	time->tm_hour = sTime.Hours;
+	time->tm_mday = sDate.Date;
+	time->tm_mon = sDate.Month-1;
+	time->tm_year = sDate.Year+100;
+	time->tm_wday = 1;
+	time->tm_yday = 1;
+	time->tm_isdst = 0;
+#ifdef DEBUG
+	char charDateTime[100];
+	sprintf(charDateTime, "Get Date/Time - %02d/%02d/%4d-%02d:%02d:%02d",
+			time->tm_mday,
+			time->tm_mon,
+			(time->tm_year+1900),
+			time->tm_hour,
+			time->tm_min,
+			time->tm_sec);
+	printf("%s\n\r", charDateTime);
+#endif /* DEBUG */
+#else /* RTC_HAL */
+	uint32_t tr, dr;
+	uint32_t st, su, mnt, mnu, ht, hu, dt, du, mt, mu, wdu, yt, yu;
+	tr = RTC_TR;
+	dr = RTC_DR;
+	su = (tr & 0x0000000F);
+	st = (tr & 0x000000F0) >> 4;
+	mnu = (tr & 0x00000F00) >> 8;
+	mnt = (tr & 0x0000F000) >> 12;
+	hu = (tr & 0x000F0000) >> 16;
+	ht = (tr & 0x00F00000) >> 20;
+	time->tm_sec = 10*st + su;
+	time->tm_min = 10*mnt + mnu;
+	time->tm_hour = 10*ht + hu;
+	du = (dr & 0x0000000F);
+	dt = (dr & 0x00000030) >> 4;
+	mu = (dr & 0x00000F00) >> 8;
+	mt = (dr & 0x00001000) >> 12;
+	//wdu = (dr & 0x0000E000) >> 3;
+	yu = (dr & 0x000F0000) >> 16;
+	yt = (dr & 0x00F00000) >> 20;
+	time->tm_mday = 10*dt + du;
+	time->tm_mon = 10*mt + mu;
+	time->tm_year = 10*yt + yu;
+#endif /* RTC_HAL */
+	return NO_ERROR;
+
+}
+
+uint32_t bcd_to_decimal(uint32_t bcd) {
+    return ((bcd & 0xf0) >> 4) * 10 + (bcd & 0x0f);
+}
+uint32_t decimal_to_bcd(uint32_t d) {
+    return ((d / 10) << 4) + (d % 10);
+}
+
+uint32_t handleAckData(uint8_t *AckMessage, uint8_t *AckSize, AckData_t *gwAckData) {
+	uint32_t ret=ERROR_INCORRECT_ACK;
+	uint8_t snr;
+	uint8_t opcode;
+	uint32_t i;
+	tm time;
+	if (AckMessage[0]==LORA_CORRECT_PACKET) {
+		gwAckData->gwReportingPeriod = 0xFFFFFFFF;
+		gwAckData->gwDate= 0xFFFFFFFF;
+		gwAckData->gwTime= 0xFFFFFFFF;
+		snr = AckMessage[1];
+		// extract and decode SNR measured by the gateway
+    	if( snr & 0x80 ) // The SNR sign bit is 1
+   		{
+        	// Invert and divide by 4
+        	snr = ( ( ~snr + 1 ) & 0xFF ) >> 2;
+        	gwAckData->gwSNR = -snr;
+    	} else {
+	        // Divide by 4
+        	gwAckData->gwSNR = ( snr & 0xFF ) >> 2;
+    	}
+    	if (*AckSize>2) {
+	    	i=1;
+    		do{
+    		    i++;
+    			opcode=AckMessage[i++];
+    			if ((opcode&ACK_NTP_CODE)==ACK_NTP_CODE) {
+    				// need to update date and time
+    				time.tm_sec=AckMessage[i];
+    				time.tm_min=AckMessage[i+1];
+    				time.tm_hour=AckMessage[i+2];
+    				time.tm_mday=AckMessage[i+3];
+    				time.tm_mon=AckMessage[i+4];
+    				time.tm_year=AckMessage[i+5]-100;
+    				time.tm_wday=AckMessage[i+6];
+    				i+=7;
+    				setRTCDateTime(time);
+    			}
+    			if ((opcode&ACK_PERIOD_CODE)==ACK_PERIOD_CODE) {
+	    			// need to update date and time
+    				gwAckData->gwReportingPeriod = (uint32_t) ((AckMessage[i]<<24)+(AckMessage[i+1]<<16)+(AckMessage[i+2]<<8)+(AckMessage[i+3])) ;
+    				inactiveDuration = gwAckData->gwReportingPeriod - PROCESSING_DURATION;
+    				i=+4;
+    			}
+			} while (i<*AckSize);
+    	}
+    	ret=NO_ERROR;
+    }
+	return ret;
+}
+
+
+uint32_t measureHX711(float* Weight) {
+	int32_t adc[4][ADC_AVG_NB], avg_adc[4]={0};
+	uint32_t i, min_idx[4], max_idx[4];
+	// Power up all ADC
+	adcFrontLeft.power_up();
+	adcFrontRight.power_up();
+	adcRearLeft.power_up();
+	adcRearRight.power_up();
+	delay(ADC_POWER_UP_MS);
+	// Note: sampling rate is 10Hz by default --> 100ms to read 1 value
+	// 80Hz is possible by modifying Hw but this increases input noise
+	// Trade-off power consumption / accuracy set to get the best acuracy
+#ifdef ADC_POWER_OPTIM
+	for (i=0;i<ADC_AVG_NB;i++) {
+		adc[0][i]=adcFrontLeft.get_units();
+		adc[1][i]=adcFrontRight.get_units();
+		adc[2][i]=adcRearLeft.get_units();
+		adc[3][i]=adcRearRight.get_units();
+		delay_WFI(100);
+	}
+#ifdef DEBUG_HX711
+	printf("Reading FrontLeft:\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\r\n",
+			adc[0][0],
+			adc[0][1],
+			adc[0][2],
+			adc[0][3],
+			adc[0][4],
+			adc[0][5],
+			adc[0][6],
+			adc[0][7]);
+	printf("Reading FrontRight:\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\r\n",
+			adc[1][0],
+			adc[1][1],
+			adc[1][2],
+			adc[1][3],
+			adc[1][4],
+			adc[1][5],
+			adc[1][6],
+			adc[1][7]);
+	printf("Reading RearLeft:\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\r\n",
+			adc[2][0],
+			adc[2][1],
+			adc[2][2],
+			adc[2][3],
+			adc[2][4],
+			adc[2][5],
+			adc[2][6],
+			adc[2][7]);
+	printf("Reading RearRight:\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\r\n",
+			adc[3][0],
+			adc[3][1],
+			adc[3][2],
+			adc[3][3],
+			adc[3][4],
+			adc[3][5],
+			adc[3][6],
+			adc[3][7]);
+#endif /* DEBUG_HX711 */
+
+	// find min and max samples
+	min_idx[0] = 0;
+	max_idx[0] = 0;
+	min_idx[1] = 0;
+	max_idx[1] = 0;
+	min_idx[2] = 0;
+	max_idx[2] = 0;
+	min_idx[3] = 0;
+	max_idx[3] = 0;
+	for (i=1;i<ADC_AVG_NB;i++) {
+		if (adc[0][i]<adc[0][min_idx[0]])
+			min_idx[0]=i;
+		if (adc[1][i]<adc[1][min_idx[1]])
+			min_idx[1]=i;
+		if (adc[2][i]<adc[2][min_idx[2]])
+			min_idx[2]=i;
+		if (adc[3][i]<adc[3][min_idx[3]])
+			min_idx[3]=i;
+		if (adc[0][i]>adc[0][max_idx[0]])
+			max_idx[0]=i;
+		if (adc[1][i]>adc[1][max_idx[1]])
+			max_idx[1]=i;
+		if (adc[2][i]>adc[2][max_idx[2]])
+			max_idx[2]=i;
+		if (adc[3][i]>adc[3][max_idx[3]])
+			max_idx[3]=i;
+	}
+#ifdef DEBUG_HX711
+	printf("\nmin_idx:\t%ld\t%ld\t%ld\t%ld\r\n",
+			min_idx[0],
+			min_idx[1],
+			min_idx[2],
+			min_idx[3]);
+	printf("max_idx:\t%ld\t%ld\t%ld\t%ld\r\n",
+			max_idx[0],
+			max_idx[1],
+			max_idx[2],
+			max_idx[3]);
+#endif /* DEBUG_HX711 */
+	// Discard min and min to calculate average
+	for (i=0;i<ADC_AVG_NB;i++) {
+		if ((i!=min_idx[0])&&(i!=max_idx[0])) {
+			avg_adc[0] += adc[0][i];
+		}
+		if ((i!=min_idx[1])&&(i!=max_idx[1])) {
+			avg_adc[1] += adc[1][i];
+		}
+		if ((i!=min_idx[2])&&(i!=max_idx[2])) {
+			avg_adc[2] += adc[2][i];
+		}
+		if ((i!=min_idx[3])&&(i!=max_idx[3])) {
+			avg_adc[3] += adc[3][i];
+		}
+	}
+#ifdef DEBUG_HX711
+	printf("\r\n");
+#endif /* DEBUG_HX711 */
+	avg_adc[0] /= ADC_AVG_NB-2;
+	avg_adc[1] /= ADC_AVG_NB-2;
+	avg_adc[2] /= ADC_AVG_NB-2;
+	avg_adc[3] /= ADC_AVG_NB-2;
+#ifdef DEBUG_HIVETRONIC
+	printf("\nReading FrontLeft  AVG:\t%ld\r\n", avg_adc[0]);
+	printf("Reading FrontRight AVG:\t%ld\r\n", avg_adc[1]);
+	printf("Reading RearLeft   AVG:\t%ld\r\n", avg_adc[2]);
+	printf("Reading RearRight  AVG:\t%ld\r\n", avg_adc[3]);
+#endif /* DEBUG_HIVETRONIC */
+#else /* ADC_POWER_OPTIM */
+	avg_adc[0]=adcFrontLeft.get_units(ADC_AVG_NB);
+	avg_adc[1]=adcFrontRight.get_units(ADC_AVG_NB);
+	avg_adc[2]=adcRearLeft.get_units(ADC_AVG_NB);
+	avg_adc[3]=adcRearRight.get_units(ADC_AVG_NB);
+#ifdef DEBUG_HIVETRONIC
+	printf("\nReading FrontLeft  AVG:\t%ld\r\n", avg_adc[0]);
+	printf("Reading FrontRight AVG:\t%ld\r\n", avg_adc[1]);
+	printf("Reading RearLeft   AVG:\t%ld\r\n", avg_adc[2]);
+	printf("Reading RearRight  AVG:\t%ld\r\n", avg_adc[3]);
+#endif /* DEBUG_HIVETRONIC */
+#endif /* ADC_POWER_OPTIM */
+	// Power down all ADC
+	adcFrontLeft.power_down();
+	adcFrontRight.power_down();
+	adcRearLeft.power_down();
+	adcRearRight.power_down();
+	// Calculate weight
+	*Weight=avg_adc[0]+avg_adc[1]+avg_adc[2]+avg_adc[3];
+#ifdef DEBUG_HIVETRONIC
+	printf("Weight: %.0f\r\n", *Weight);
+#endif /* DEBUG_HIVETRONIC */
+	return NO_ERROR;
+}
+
+uint32_t adjustWeight(float* Weight, float T) {
+	uint32_t ret=NO_ERROR;
+	float deltaTemp, deltaWeight;
+	deltaTemp = T-ADC_CAL_TEMP;
+	deltaWeight = LOADCELL_TEMP_EFFECT*deltaTemp;
+#ifdef DEBUG_HIVETRONIC
+	printf("Weight before adjustment: %.0f\r\n", *Weight);
+	printf("Weight after adjustment: %.0f\r\n", *Weight-deltaWeight);
+#endif /* DEBUG_HIVETRONIC */
+	*Weight = *Weight - deltaWeight;
+	return ret;
+}
+uint32_t measureTempHum(float* T, float* H) {
+	float t=0, h=0;
+	uint32_t ret=NO_ERROR;
+	// Reading temperature or humidity takes about 250 milliseconds!
+	// Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+	h = dht.readHumidity();
+	// Read temperature as Celsius (the default)
+	t = dht.readTemperature();
+	// Check if any reads failed and exit early (to try again).
+	if (isnan(h) || isnan(t)) {
+#ifdef DEBUG_HIVETRONIC
+		printf("Failed to read from DHT sensor!\r\n");
+#endif /* DEBUG_HIVETRONIC*/
+		h=0;
+		t=0;
+		ret=ERROR_DHT_FAILED;
+	}
+	*T = t;
+	*H = h;
+#ifdef DEBUG_HIVETRONIC
+	printf("DHT22: %3.1f°C - %3.1f%%\r\n", *T, *H);
+#endif /* DEBUG_HIVETRONIC*/
+	return ret;
+}
+
+uint32_t initDHT(void) {
+#ifdef DEBUG_HIVETRONIC
+	printf("initializing DHT22 sensor ...\r\n");
+#endif /* DEBUG_HIVETRONIC*/
+	Wire.begin();
+	dht.begin();
+#ifdef DEBUG_HIVETRONIC
+	printf("... init done\r\n");
+#endif /* DEBUG_HIVETRONIC*/
+	return NO_ERROR;
+}
+
+uint32_t initRTC(void) {
+#ifdef RTC_HAL
+	RTC_TimeTypeDef sTime;
+	RTC_DateTypeDef sDate;
+
+
+	/**Initialize RTC Only
+	  */
+	hrtc.Instance = RTC;
+	hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+	/* Prescaler values are set to get 1Hz clock from LSE (32.768KHz) */
+	hrtc.Init.AsynchPrediv = 127;
+	hrtc.Init.SynchPrediv = 255;
+	hrtc.Init.OutPut = RTC_OUTPUT_WAKEUP;
+	hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+	hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+	hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+	if (HAL_RTC_Init(&hrtc) != HAL_OK)
+	{
+	  Error_Handler(ERROR_INITRTC);
+	}
+
+	// set SYSCFGEN
+	(*(volatile uint32_t *) (RCC_BASE+0x4C)) |= 0x01;
+	// set PWREN
+	(*(volatile uint32_t *) (RCC_BASE+0x58)) |= 0x10000000;
+	delay(100);
+	// set DBP in PWR_CR1
+	(*(volatile uint32_t *) PWR_BASE) |= 0x0100;
+    // set RTCSEL=LSE and set LSEON in RCC_BDCR
+	(*(volatile uint32_t *) (RCC_BASE+0x90)) |= 0x000000101;
+    // set RTCEN in RCC_BDCR
+	(*(volatile uint32_t *) (RCC_BASE+0x90)) |= 0x00008000;
+
+	/* default date : May 16, 2016 - 12:00:00 */
+	sTime.Hours = 0x12;
+	sTime.Minutes = 0x0;
+	sTime.Seconds = 0x0;
+	sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+	sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+	if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+	{
+	  Error_Handler(ERROR_SETTIME);
+	}
+	sDate.WeekDay = RTC_WEEKDAY_SATURDAY;
+	sDate.Month = RTC_MONTH_MAY;
+	sDate.Date = 0x16;
+	sDate.Year = 0x16;
+
+	if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+	{
+	  Error_Handler(ERROR_SETDATE);
+	}
+#else /* RTC_HAL */
+	uint32_t value;
+	tm time;    time.tm_sec=0;
+    time.tm_min=0;
+    time.tm_hour=12;
+    time.tm_mday=16;
+    time.tm_mon=5;
+    time.tm_year=16;
+    time.tm_wday=6;
+    hrtc.Instance = RTC;
+      // set SYSCFGEN
+    RCC_APB2ENR |= 0x01;
+    // set PWREN
+    RCC_APB1ENR1 |= 0x10000000;
+    delay(100);
+    // set DBP
+    PWR_CR1 |= 0x0100;
+    // set RTCSEL=LSE and set LSEON
+    RCC_BDCR |= 0x000000101;
+    // set RTCEN
+    RCC_BDCR |= 0x00008000;
+    // update date and time in RTC
+    setRTCDateTime(time);
+#endif /* RTC_HAL */
+	return NO_ERROR;
+}
+
+
+uint32_t initADC(void) {
+	// Notes about HX711
+	// RATE = 0 --> 10 samples/second
+	// internal oscillator used --> XI to GND, XO not connected
+	// internal voltage regulator used
+	// Power consumption: <1.5mA in normal mode ; <1uA in power down mode
+	// Might need temperature compensation:
+	// 		Offset drift:	+/- 6nV/°C
+	//		Gain drift:		+/- 5ppm/°C
+	int32_t adc[4];
+#ifdef DEBUG_HIVETRONIC
+	printf("initializing HX711 converters ...\r\n");
+#endif /* DEBUG_HIVETRONIC*/
+	// initialize each HX711
+	adcFrontRight.begin(HX711_DOUT1, HX711_PD_SCK1, HX711_GAIN);
+	adcFrontLeft.begin(HX711_DOUT2, HX711_PD_SCK2, HX711_GAIN);
+	adcRearLeft.begin(HX711_DOUT3, HX711_PD_SCK3, HX711_GAIN);
+	adcRearRight.begin(HX711_DOUT4, HX711_PD_SCK4, HX711_GAIN);
+	// Power up all ADC
+	adcFrontLeft.power_up();
+	adcFrontRight.power_up();
+	adcRearLeft.power_up();
+	adcRearRight.power_up();
+	// Settling time is 400ms at 10Hz to get a stable output
+	// As first readings are executed to configure next readings, no need to have stable output
+	// During initial phase of the project, it is anyway better to wait for stable output
+	delay(500);
+	// Set offset
+	adcFrontLeft.set_offset(ADC_OFFSET_FRONT_LEFT);
+	adcFrontRight.set_offset(ADC_OFFSET_FRONT_RIGHT);
+	adcRearLeft.set_offset(ADC_OFFSET_REAR_LEFT);
+	adcRearRight.set_offset(ADC_OFFSET_REAR_RIGHT);
+	// Set scale to a value obtained by calibrating the scale with known weight
+  	adcFrontLeft.set_scale(ADC_SCALE);
+	adcFrontRight.set_scale(ADC_SCALE);
+	adcRearLeft.set_scale(ADC_SCALE);
+	adcRearRight.set_scale(ADC_SCALE);
+	// Read once all ADC to initialize next read access
+	adc[0]=adcFrontLeft.get_units();
+	adc[1]=adcFrontRight.get_units();
+	adc[2]=adcRearLeft.get_units();
+	adc[3]=adcRearRight.get_units();
+	// Power down all ADC
+	adcFrontLeft.power_down();
+	adcFrontRight.power_down();
+	adcRearLeft.power_down();
+	adcRearRight.power_down();
+#ifdef DEBUG_HIVETRONIC
+	printf("\tFrontLeft:\t%ld\r\n",adc[0]);
+	printf("\tFrontRight:\t%ld\r\n",adc[1]);
+	printf("\tRearLeft:\t%ld\r\n",adc[2]);
+	printf("\tRearRight:\t%ld\r\n",adc[3]);
+	printf("... init done");
+#endif /* DEBUG_HIVETRONIC*/
+	return NO_ERROR;
+}
+
+
+uint32_t initLoRa(void) {
+	int ret;
+#ifdef DEBUG_HIVETRONIC
+	printf("initializing LoRa transceiver ...\r\n");
+#endif /* DEBUG_HIVETRONIC*/
+	// Power ON the module
+	sx1272.ON();
+	// Set transmission mode and print the result
+	ret = sx1272.setMode(loraMode);
+#ifdef DEBUG_HIVETRONIC
+	printf("Lora mode: %d\r\n", loraMode);
+	printf("Setting Mode: state %d\r\n", ret);
+#endif /* DEBUG_HIVETRONIC*/
+	// enable carrier sense
+	sx1272._enableCarrierSense = true;
+	// Select frequency channel
+	ret = sx1272.setChannel(CH_10_868);
+#ifdef DEBUG_HIVETRONIC
+	printf("Setting Channel: state %d\r\n", ret);
+#endif /* DEBUG_HIVETRONIC*/
+	// Select output power (Max, High or Low)
+	ret = sx1272.setPower(LORAPOWER);
+#ifdef DEBUG_HIVETRONIC
+	printf("Setting Power: state %d\r\n", ret);
+#endif /* DEBUG_HIVETRONIC*/
+	// Set the node address and print the result
+	ret = sx1272.setNodeAddress(LORA_NODE_ADDR);
+#ifdef DEBUG_HIVETRONIC
+	printf("Setting node addr: state %d\r\n", ret);
+	// Print a success message
+	printf("SX1272/76 successfully configured\r\n");
+#endif /* DEBUG_HIVETRONIC*/
+	return NO_ERROR;
+}
+
+void Error_Handler(uint32_t error_code) {
+	printf("\n\n !!!!!! Error_Handler - Code %2ld !!!!!!\r\n",error_code);
+	while(1) {
+		/* infinite loop */
+	}
+}
