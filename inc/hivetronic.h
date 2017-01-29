@@ -73,7 +73,7 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // OTHER DEFINES
 #define DHTTYPE 				DHT22
-/* Calibration at 21.0°C with 8s delay after power up */
+/* Calibration at 21.0ï¿½C with 8s delay after power up */
 #define ADC_OFFSET_FRONT_LEFT 	-163050
 #define ADC_OFFSET_FRONT_RIGHT 	86050
 #define ADC_OFFSET_REAR_RIGHT 	160110
@@ -81,13 +81,13 @@
 #define ADC_CAL_TEMP			21
 #define ADC_SCALE 				1
 /*
- * 0.05% FS (10°C) = 50000 (50kg) x 0.0005 = 25g
- * Weight = sum of 4 load cell ==> 100g / 10°C ==> 10 g/°C
+ * 0.05% FS (10ï¿½C) = 50000 (50kg) x 0.0005 = 25g
+ * Weight = sum of 4 load cell ==> 100g / 10ï¿½C ==> 10 g/ï¿½C
  * Temp_Effect = 10x ADC_SCALE
  */
 #define	LOADCELL_TEMP_EFFECT	330*4
-#define ADC_AVG_NB				8
-#define ADC_POWER_UP_MS			8000
+#define ADC_AVG_NB				32
+#define ADC_POWER_UP_MS			600
 #define LORA_CORRECT_PACKET		0
 #define ACK_NTP_CODE			0x01
 #define ACK_PERIOD_CODE			0x02

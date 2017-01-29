@@ -575,6 +575,10 @@ uint32_t measureHX711(float* Weight) {
 		adc[3][i]=adcRearRight.get_units();
 		delay_WFI(100);
 	}
+
+	/* Sort samples */
+	/* Calculate average after extracting samples from first and last quartiles */
+
 #ifdef DEBUG_HX711
 	printf("Reading FrontLeft:\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\r\n",
 			adc[0][0],
