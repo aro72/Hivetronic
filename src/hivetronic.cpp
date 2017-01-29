@@ -552,6 +552,18 @@ uint32_t measureHX711(float* Weight) {
 	adcRearLeft.power_up();
 	adcRearRight.power_up();
 	delay(ADC_POWER_UP_MS);
+#ifdef ADC_CALIBRATION
+	float count=0;
+	double val[4]={0};
+	for (;;) {
+		count++;
+		val[0] = ((count-1)/count)*val[0] + (1/count)*adcFrontLeft.get_units();
+		val[1] = ((count-1)/count)*val[1] + (1/count)*adcFrontRight.get_units();
+		val[2] = ((count-1)/count)*val[2] + (1/count)*adcRearLeft.get_units();
+		val[3] = ((count-1)/count)*val[3] + (1/count)*adcRearRight.get_units();
+		printf("FL:%f\tFR:%f\tRL:%f\tRR:%f\tS=%f\n\r",val[0], val[1], val[2], val[3], val[0]+val[1]+val[2]+val[3]);
+	}
+#endif /* ADC_CALIBRATION */
 	// Note: sampling rate is 10Hz by default --> 100ms to read 1 value
 	// 80Hz is possible by modifying Hw but this increases input noise
 	// Trade-off power consumption / accuracy set to get the best acuracy
