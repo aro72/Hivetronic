@@ -542,171 +542,111 @@ uint32_t handleAckData(uint8_t *AckMessage, uint8_t *AckSize, AckData_t *gwAckDa
 	return ret;
 }
 
-
 uint32_t measureHX711(float* Weight) {
-	int32_t adc[4][ADC_AVG_NB], avg_adc[4]={0};
-	uint32_t i, min_idx[4], max_idx[4];
+	uint32_t FrontLeftTab[ADC_NB_SAMPLES];
+	uint32_t FrontRightTab[ADC_NB_SAMPLES];
+	uint32_t RearLeftTab[ADC_NB_SAMPLES];
+	uint32_t RearRightTab[ADC_NB_SAMPLES];
+	uint32_t i, start_idx, stop_idx;
+	float FrontLeft_avg, FrontRight_avg, RearLeft_avg, RearRight_avg;
+
 	// Power up all ADC
 	adcFrontLeft.power_up();
 	adcFrontRight.power_up();
 	adcRearLeft.power_up();
 	adcRearRight.power_up();
 	delay(ADC_POWER_UP_MS);
-#ifdef ADC_CALIBRATION
-	float count=0;
-	double val[4]={0};
-	for (;;) {
-		count++;
-		val[0] = ((count-1)/count)*val[0] + (1/count)*adcFrontLeft.get_units();
-		val[1] = ((count-1)/count)*val[1] + (1/count)*adcFrontRight.get_units();
-		val[2] = ((count-1)/count)*val[2] + (1/count)*adcRearLeft.get_units();
-		val[3] = ((count-1)/count)*val[3] + (1/count)*adcRearRight.get_units();
-		printf("FL:%f\tFR:%f\tRL:%f\tRR:%f\tS=%f\n\r",val[0], val[1], val[2], val[3], val[0]+val[1]+val[2]+val[3]);
-	}
-#endif /* ADC_CALIBRATION */
-	// Note: sampling rate is 10Hz by default --> 100ms to read 1 value
-	// 80Hz is possible by modifying Hw but this increases input noise
-	// Trade-off power consumption / accuracy set to get the best acuracy
-#ifdef ADC_POWER_OPTIM
-	for (i=0;i<ADC_AVG_NB;i++) {
-		adc[0][i]=adcFrontLeft.get_units();
-		adc[1][i]=adcFrontRight.get_units();
-		adc[2][i]=adcRearLeft.get_units();
-		adc[3][i]=adcRearRight.get_units();
+
+	// Read ADC for all load cells
+	for (i=0;i<ADC_NB_SAMPLES;i++) {
+		FrontLeftTab[i]=adcFrontLeft.get_units();
+		FrontRightTab[i]=adcFrontRight.get_units();
+		RearLeftTab[i]=adcRearLeft.get_units();
+		RearRightTab[i]=adcRearRight.get_units();
 		delay_WFI(100);
 	}
 
-	/* Sort samples */
-	/* Calculate average after extracting samples from first and last quartiles */
-
-#ifdef DEBUG_HX711
-	printf("Reading FrontLeft:\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\r\n",
-			adc[0][0],
-			adc[0][1],
-			adc[0][2],
-			adc[0][3],
-			adc[0][4],
-			adc[0][5],
-			adc[0][6],
-			adc[0][7]);
-	printf("Reading FrontRight:\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\r\n",
-			adc[1][0],
-			adc[1][1],
-			adc[1][2],
-			adc[1][3],
-			adc[1][4],
-			adc[1][5],
-			adc[1][6],
-			adc[1][7]);
-	printf("Reading RearLeft:\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\r\n",
-			adc[2][0],
-			adc[2][1],
-			adc[2][2],
-			adc[2][3],
-			adc[2][4],
-			adc[2][5],
-			adc[2][6],
-			adc[2][7]);
-	printf("Reading RearRight:\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\r\n",
-			adc[3][0],
-			adc[3][1],
-			adc[3][2],
-			adc[3][3],
-			adc[3][4],
-			adc[3][5],
-			adc[3][6],
-			adc[3][7]);
-#endif /* DEBUG_HX711 */
-
-	// find min and max samples
-	min_idx[0] = 0;
-	max_idx[0] = 0;
-	min_idx[1] = 0;
-	max_idx[1] = 0;
-	min_idx[2] = 0;
-	max_idx[2] = 0;
-	min_idx[3] = 0;
-	max_idx[3] = 0;
-	for (i=1;i<ADC_AVG_NB;i++) {
-		if (adc[0][i]<adc[0][min_idx[0]])
-			min_idx[0]=i;
-		if (adc[1][i]<adc[1][min_idx[1]])
-			min_idx[1]=i;
-		if (adc[2][i]<adc[2][min_idx[2]])
-			min_idx[2]=i;
-		if (adc[3][i]<adc[3][min_idx[3]])
-			min_idx[3]=i;
-		if (adc[0][i]>adc[0][max_idx[0]])
-			max_idx[0]=i;
-		if (adc[1][i]>adc[1][max_idx[1]])
-			max_idx[1]=i;
-		if (adc[2][i]>adc[2][max_idx[2]])
-			max_idx[2]=i;
-		if (adc[3][i]>adc[3][max_idx[3]])
-			max_idx[3]=i;
-	}
-#ifdef DEBUG_HX711
-	printf("\nmin_idx:\t%ld\t%ld\t%ld\t%ld\r\n",
-			min_idx[0],
-			min_idx[1],
-			min_idx[2],
-			min_idx[3]);
-	printf("max_idx:\t%ld\t%ld\t%ld\t%ld\r\n",
-			max_idx[0],
-			max_idx[1],
-			max_idx[2],
-			max_idx[3]);
-#endif /* DEBUG_HX711 */
-	// Discard min and min to calculate average
-	for (i=0;i<ADC_AVG_NB;i++) {
-		if ((i!=min_idx[0])&&(i!=max_idx[0])) {
-			avg_adc[0] += adc[0][i];
-		}
-		if ((i!=min_idx[1])&&(i!=max_idx[1])) {
-			avg_adc[1] += adc[1][i];
-		}
-		if ((i!=min_idx[2])&&(i!=max_idx[2])) {
-			avg_adc[2] += adc[2][i];
-		}
-		if ((i!=min_idx[3])&&(i!=max_idx[3])) {
-			avg_adc[3] += adc[3][i];
-		}
-	}
-#ifdef DEBUG_HX711
-	printf("\r\n");
-#endif /* DEBUG_HX711 */
-	avg_adc[0] /= ADC_AVG_NB-2;
-	avg_adc[1] /= ADC_AVG_NB-2;
-	avg_adc[2] /= ADC_AVG_NB-2;
-	avg_adc[3] /= ADC_AVG_NB-2;
-#ifdef DEBUG_HIVETRONIC
-	printf("\nReading FrontLeft  AVG:\t%ld\r\n", avg_adc[0]);
-	printf("Reading FrontRight AVG:\t%ld\r\n", avg_adc[1]);
-	printf("Reading RearLeft   AVG:\t%ld\r\n", avg_adc[2]);
-	printf("Reading RearRight  AVG:\t%ld\r\n", avg_adc[3]);
-#endif /* DEBUG_HIVETRONIC */
-#else /* ADC_POWER_OPTIM */
-	avg_adc[0]=adcFrontLeft.get_units(ADC_AVG_NB);
-	avg_adc[1]=adcFrontRight.get_units(ADC_AVG_NB);
-	avg_adc[2]=adcRearLeft.get_units(ADC_AVG_NB);
-	avg_adc[3]=adcRearRight.get_units(ADC_AVG_NB);
-#ifdef DEBUG_HIVETRONIC
-	printf("\nReading FrontLeft  AVG:\t%ld\r\n", avg_adc[0]);
-	printf("Reading FrontRight AVG:\t%ld\r\n", avg_adc[1]);
-	printf("Reading RearLeft   AVG:\t%ld\r\n", avg_adc[2]);
-	printf("Reading RearRight  AVG:\t%ld\r\n", avg_adc[3]);
-#endif /* DEBUG_HIVETRONIC */
-#endif /* ADC_POWER_OPTIM */
 	// Power down all ADC
 	adcFrontLeft.power_down();
 	adcFrontRight.power_down();
 	adcRearLeft.power_down();
 	adcRearRight.power_down();
+
+#ifdef DEBUG_HX711
+	// Display unsorted tables
+	printf("\n\rFrontLeft :\t");
+	for (i=0;i<ADC_NB_SAMPLES;i++) {
+		printf("  %ld",FrontLeftTab[i]);
+	}
+	printf("\n\rFrontRight :\t");
+	for (i=0;i<ADC_NB_SAMPLES;i++) {
+		printf("  %ld",FrontRightTab[i]);
+	}
+	printf("\n\rRearLeft :\t");
+	for (i=0;i<ADC_NB_SAMPLES;i++) {
+		printf("  %ld",RearLeftTab[i]);
+	}
+	printf("\n\rRearRight :\t");
+	for (i=0;i<ADC_NB_SAMPLES;i++) {
+		printf("  %ld",RearRightTab[i]);
+	}
+	printf("\n\r");
+#endif /* DEBUG_HX711 */
+
+	// Sort tables
+	merge_sort(FrontLeftTab, ADC_NB_SAMPLES);
+	merge_sort(FrontRightTab, ADC_NB_SAMPLES);
+	merge_sort(RearLeftTab, ADC_NB_SAMPLES);
+	merge_sort(RearRightTab, ADC_NB_SAMPLES);
+
+#ifdef DEBUG_HX711
+	// Display sorted tables
+	printf("\n\rFrontLeft :\t");
+	for (i=0;i<ADC_NB_SAMPLES;i++) {
+		printf("  %ld",FrontLeftTab[i]);
+	}
+	printf("\n\rFrontRight :\t");
+	for (i=0;i<ADC_NB_SAMPLES;i++) {
+		printf("  %ld",FrontRightTab[i]);
+	}
+	printf("\n\rRearLeft :\t");
+	for (i=0;i<ADC_NB_SAMPLES;i++) {
+		printf("  %ld",RearLeftTab[i]);
+	}
+	printf("\n\rRearRight :\t");
+	for (i=0;i<ADC_NB_SAMPLES;i++) {
+		printf("  %ld",RearRightTab[i]);
+	}
+	printf("\n\r");
+#endif /* DEBUG_HX711 */
+
+	// Calculate average by removing first quarter and last quarter of sorted tables
+	start_idx = ADC_DROPPED_SAMPLES/2;
+	stop_idx = ADC_NB_SAMPLES - (ADC_DROPPED_SAMPLES/2);
+#ifdef DEBUG_HX711
+	printf("Start_index: %ld\r\n", start_idx);
+	printf("Stop_index: %ld\r\n", stop_idx);
+#endif /* DEBUG_HX711 */
+	for (i=start_idx;i<stop_idx;i++) {
+			FrontLeft_avg += FrontLeftTab[i];
+			FrontRight_avg += FrontRightTab[i];
+			RearLeft_avg += RearLeftTab[i];
+			RearRight_avg += RearRightTab[i];
+	}
+	FrontLeft_avg /= ADC_NB_SAMPLES-ADC_DROPPED_SAMPLES;
+	FrontRight_avg /= ADC_NB_SAMPLES-ADC_DROPPED_SAMPLES;
+	RearLeft_avg /= ADC_NB_SAMPLES-ADC_DROPPED_SAMPLES;
+	RearRight_avg /= ADC_NB_SAMPLES-ADC_DROPPED_SAMPLES;
+#ifdef DEBUG_HX711
+	printf("Average: %.0f\t%.0f\t%.0f\t%.0f\r\n", FrontLeft_avg, FrontRight_avg, RearLeft_avg, RearRight_avg);
+#endif /* DEBUG_HX711 */
+
 	// Calculate weight
-	*Weight=avg_adc[0]+avg_adc[1]+avg_adc[2]+avg_adc[3];
+	*Weight = FrontLeft_avg + FrontRight_avg + RearLeft_avg + RearRight_avg;
 #ifdef DEBUG_HIVETRONIC
 	printf("Weight: %.0f\r\n", *Weight);
 #endif /* DEBUG_HIVETRONIC */
+
 	return NO_ERROR;
 }
 

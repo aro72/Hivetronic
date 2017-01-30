@@ -21,6 +21,7 @@
 #include "stm32l4xx_hal.h"
 #include "error.h"
 #include "power.h"
+#include "sorting.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GLOBAL CONFIGURATIONS
@@ -87,6 +88,8 @@
  */
 #define	LOADCELL_TEMP_EFFECT	330*4
 #define ADC_AVG_NB				32
+#define ADC_NB_SAMPLES			32
+#define ADC_DROPPED_SAMPLES		16
 #define ADC_POWER_UP_MS			600
 #define LORA_CORRECT_PACKET		0
 #define ACK_NTP_CODE			0x01
