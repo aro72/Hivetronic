@@ -164,16 +164,16 @@ void SystemClock_Config(void)
   PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
-	    /* Initialization Error */
-	    while(1);
+      /* Initialization Error */
+      while(1);
   }
 
   /**Configure the main internal regulator output voltage
   */
   if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
   {
-	    /* Initialization Error */
-	    while(1);
+      /* Initialization Error */
+      while(1);
   }
 
 }
@@ -195,6 +195,9 @@ void hw_config_init(void)
 /******************************************************************************/
 /*            Cortex-M4 Processor Exceptions Handlers                         */
 /******************************************************************************/
+
+/* External variables --------------------------------------------------------*/
+extern RTC_HandleTypeDef hrtc;
 
 /**
   * @brief  This function handles NMI exception.
@@ -287,6 +290,29 @@ void PendSV_Handler(void)
 /**
   * @}
   */
+
+/******************************************************************************/
+/* STM32L4xx Peripheral Interrupt Handlers                                    */
+/* Add here the Interrupt Handlers for the used peripherals.                  */
+/* For the available peripheral interrupt handler names,                      */
+/* please refer to the startup file (startup_stm32l4xx.s).                    */
+/******************************************************************************/
+
+/**
+* @brief This function handles RTC alarm interrupt through EXTI line 18.
+*/
+void RTC_Alarm_IRQHandler(void)
+{
+  /* USER CODE BEGIN RTC_Alarm_IRQn 0 */
+
+  /* USER CODE END RTC_Alarm_IRQn 0 */
+  HAL_RTC_AlarmIRQHandler(&hrtc);
+  printf("Alarm IT Handler\r\n");
+  /* USER CODE BEGIN RTC_Alarm_IRQn 1 */
+
+  /* USER CODE END RTC_Alarm_IRQn 1 */
+}
+
 #ifdef __cplusplus
 }
 #endif

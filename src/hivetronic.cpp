@@ -148,83 +148,33 @@ void loop(void)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // FUNCTIONS IMPLEMENTATION
-#define NEW_WFI_N
 
 uint32_t delay_WFI(uint32_t duration_ms) {
-#ifdef NEW_WFI
-	uint32_t ret=ERROR_WFI, savedLatency, newLatency;
-	uint32_t savedSysclk;
 	uint32_t savedSysTickCTRL, savedSysTickLOAD, savedSysTickVAL, savedSysTickCALIB;
 	uint32_t newSysTickLOAD;
 	RCC_ClkInitTypeDef savedClkConfig, newClkConfig;
 	RCC_OscInitTypeDef SavedOscConfig, newOscConfig;
 	RCC_PeriphCLKInitTypeDef savedPeriphClkConfig, newPerighClkConfig;
+	TIM_HandleTypeDef htim5;
 
-	/* Save context */
+	/* Save context and stop SysTick*/
 	savedSysTickCTRL = SysTick->CTRL;
 	savedSysTickLOAD = SysTick->LOAD;
 	savedSysTickVAL = SysTick->VAL;
 	savedSysTickCALIB = SysTick->CALIB;
-	HAL_RCC_GetClockConfig(&savedClkConfig, &savedLatency);
-	HAL_RCC_GetOscConfig(&SavedOscConfig);
-
-	/* Set new clocks configuration to enable LPSLEEP mode */
 	HAL_SuspendTick();
-	newOscConfig.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
-	newOscConfig.LSEState = RCC_LSE_ON;
-	newOscConfig.MSIState = RCC_MSI_ON;
-	newOscConfig.MSIClockRange = RCC_MSIRANGE_4; /* MSI at 1MHz */
-	newOscConfig.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
-	newOscConfig.PLL.PLLState = RCC_PLL_OFF;
-	newClkConfig.ClockType = (RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2);
-	newClkConfig.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
-	newClkConfig.AHBCLKDivider = RCC_SYSCLK_DIV512;
-	newClkConfig.APB1CLKDivider = RCC_HCLK_DIV16;
-	newClkConfig.APB2CLKDivider = RCC_HCLK_DIV16;
-	newLatency = FLASH_LATENCY_0;
-	//HAL_RCC_GetClockConfig(&newClkConfig, &newLatency); /* Switch from PLL to MSI */
-	//HAL_RCC_GetOscConfig(&newOscConfig); /* then, switch off PLL */
-	//HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE2); /* Switch to low power regulator */
-
-	/* Set SysTick for sleep duration in ticks number */
-	newSysTickLOAD = savedSysTickLOAD*duration_ms; /* FIX MAX DURATION */
-	HAL_SYSTICK_Config(newSysTickLOAD); /* FIX THE PARAMETER */
+	/* Stop TIM5 used for 1ms tick used in delay function */
+	htim5.Instance = TIM5;
+	__HAL_TIM_DISABLE(&htim5);
 
 	/* enter WaitForInterrupt */
 	__WFI();
 
-	/* Restore context */
-	HAL_SuspendTick();
-	//HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1); /* Switch to main regulator */
-	//HAL_RCC_OscConfig(&SavedOscConfig); /* start PLL */
-	//HAL_RCC_ClockConfig(&savedClkConfig, savedLatency); /* switch from MSI to PLL */
+	/* Restore SysTick and TIM5 */
 	HAL_SYSTICK_Config(savedSysTickLOAD); /* FIX THE PARAMETER */
+	__HAL_TIM_ENABLE(&htim5);
 
-
-	return ret;
-#else /* NEW_WFI */
-	/* duration_ms is in milliseconds */
-	/* FIX THIS : only works with AHB clock = 64MHz */
-	/* TIM5_PSC = 0x3F - Fck_cnt=Fahb/64=1MHz */
-	/* TIM5_ARR = 0x3E7 - Ftim5=Fck_cnt/1000=1KHz */
-	uint32_t tim5_reload, systick_csr;
-	uint32_t ret=ERROR_WFI;
-	if (duration_ms<(0xFFFFFFFF/1000)) {
-		tim5_reload= duration_ms*1000;
-		TIM5_CR1 &= 0xFFFFFFFE;
-		TIM5_ARR=tim5_reload;
-		TIM5_CR1 |= 0x01;
-		systick_csr = SYST_CSR;
-		SYST_CSR &=0xFFFFFFFD;
-    	__WFI();
-		TIM5_CR1 &= 0xFFFFFFFE;
-		TIM5_ARR=0x000003E7;
-		TIM5_CR1 |= 0x01;
-		SYST_CSR = systick_csr;
-		ret = NO_ERROR;
-	}
-	return ret;
-#endif /* NEW_WFI */
+	return NO_ERROR;
 }
 
 uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
@@ -563,7 +513,7 @@ uint32_t measureHX711(float* Weight) {
 		FrontRightTab[i]=adcFrontRight.get_units();
 		RearLeftTab[i]=adcRearLeft.get_units();
 		RearRightTab[i]=adcRearRight.get_units();
-		delay_WFI(100);
+		delay(100);
 	}
 
 	// Power down all ADC
@@ -776,6 +726,9 @@ uint32_t initRTC(void) {
     // update date and time in RTC
     setRTCDateTime(time);
 #endif /* RTC_HAL */
+    /* Peripheral interrupt init */
+    HAL_NVIC_SetPriority(RTC_Alarm_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(RTC_Alarm_IRQn);
 	return NO_ERROR;
 }
 
