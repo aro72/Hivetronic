@@ -102,7 +102,11 @@ void loop(void)
 		// measure temperature
 		measureTempHum(&Temp, &Hum);
 		measureHX711(&Weight);
-		adjustWeight(&Weight, Temp);
+		/*
+		* remove temp adjustment as long as calibration and 
+		* recording of a fixed weight at different temperature is not available
+		*/
+		// adjustWeight(&Weight, Temp);
 		getRTCDateTime(&time);
 		sprintf(cDateTime, "%02d/%02d/%4d-%02d:%02d:%02d",
 				time.tm_mday,
