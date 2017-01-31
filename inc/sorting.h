@@ -14,7 +14,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // PROTOTYPES
-void merge (uint32_t *a, int n, uint32_t m);
-void merge_sort (uint32_t *a, uint32_t n);
+void merge (int32_t *a, int n, uint32_t m);
+void merge_sort (int32_t *a, uint32_t n);
 
 #endif /* SORTING_H_ */

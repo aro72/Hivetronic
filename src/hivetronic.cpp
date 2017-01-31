@@ -474,10 +474,10 @@ uint32_t handleAckData(uint8_t *AckMessage, uint8_t *AckSize, AckData_t *gwAckDa
 }
 
 uint32_t measureHX711(float* Weight) {
-	uint32_t FrontLeftTab[ADC_NB_SAMPLES];
-	uint32_t FrontRightTab[ADC_NB_SAMPLES];
-	uint32_t RearLeftTab[ADC_NB_SAMPLES];
-	uint32_t RearRightTab[ADC_NB_SAMPLES];
+	int32_t FrontLeftTab[ADC_NB_SAMPLES];
+	int32_t FrontRightTab[ADC_NB_SAMPLES];
+	int32_t RearLeftTab[ADC_NB_SAMPLES];
+	int32_t RearRightTab[ADC_NB_SAMPLES];
 	uint32_t i, start_idx, stop_idx;
 	float FrontLeft_avg, FrontRight_avg, RearLeft_avg, RearRight_avg;
 
@@ -490,10 +490,10 @@ uint32_t measureHX711(float* Weight) {
 
 	// Read ADC for all load cells
 	for (i=0;i<ADC_NB_SAMPLES;i++) {
-		FrontLeftTab[i]=adcFrontLeft.get_units();
-		FrontRightTab[i]=adcFrontRight.get_units();
-		RearLeftTab[i]=adcRearLeft.get_units();
-		RearRightTab[i]=adcRearRight.get_units();
+		FrontLeftTab[i]  = (int32_t)  adcFrontLeft.get_units();
+		FrontRightTab[i] = (int32_t) adcFrontRight.get_units();
+		RearLeftTab[i]   = (int32_t) adcRearLeft.get_units();
+		RearRightTab[i]  = (int32_t) adcRearRight.get_units();
 		delay(100);
 	}
 
