@@ -210,15 +210,16 @@ uint32_t delay_WFI(uint32_t duration_ms) {
 	uint32_t tim5_reload, systick_csr;
 	uint32_t ret=ERROR_WFI;
 	if (duration_ms<(0xFFFFFFFF/1000)) {
-		tim5_reload= duration_ms*1000;
+		//tim5_reload= 2*duration_ms*1000;
 		TIM5_CR1 &= 0xFFFFFFFE;
-		TIM5_ARR=tim5_reload;
-		TIM5_CR1 |= 0x01;
+		//TIM5_ARR=tim5_reload;
+		//TIM5_CR1 |= 0x01;
 		systick_csr = SYST_CSR;
 		SYST_CSR &=0xFFFFFFFD;
     	__WFI();
-		TIM5_CR1 &= 0xFFFFFFFE;
-		TIM5_ARR=0x000003E7;
+		//TIM5_CR1 &= 0xFFFFFFFE;
+		//TIM5_ARR=0x000003E7;
+		//TIM5_PSC = 0x3F;
 		TIM5_CR1 |= 0x01;
 		SYST_CSR = systick_csr;
 		ret = NO_ERROR;
@@ -246,7 +247,7 @@ uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
 		RTC_WPR = 0x53;
 		delay(50);
 		// clear ALRAE to disable Alarm A
-		RTC_CR &= 0x00000100;
+		RTC_CR &= ~0x00000100;
 		// clear ALARAF flag
 		RTC_ISR &= ~0x00000100;
 	}
@@ -256,13 +257,13 @@ uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
 #endif /* DEBUG_HIVETRONIC */
 		delay(10);
 		delay_WFI(duration*1000);
-		while ((RTC_ISR&0x00000100)!=0x00000100) {
+		// while ((RTC_ISR&0x00000100)!=0x00000100) {
 			// wait for alarm flag
 #ifdef DEBUG_HIVETRONIC
-			printf("wait RTC_ISR ALARAF\r\n");
+			//printf("wait RTC_ISR ALARAF\r\n");
 #endif /* DEBUG_HIVETRONIC */
-			delay(1000);
-		}
+			//delay(1000);
+		//}
 #ifdef DEBUG_HIVETRONIC
 		printf("\t... WFI exit\r\n");
 #endif /* DEBUG_HIVETRONIC */
@@ -342,13 +343,22 @@ uint32_t setAlarm(tm alrm) {
 		// wait for ALARAWF set
 	}
 	// clear ALRAE to disable Alarm A
-	RTC_CR &= ~0x00000100;
+	RTC_CR &= ~0x00100100;
+	// enable RTC_ALARM output: OSEL=0b01
+	RTC_CR |= 0x00201000;
 	// clear ALARAF flag
 	RTC_ISR &= ~0x00000100;
 	// set alarm hour:min:sec
 	RTC_ALARMAR = ht<<20 | hu<<16 | mnt<<12 | mnu<<8 | st<<4 | su;
 	// date mask doesn't care
 	RTC_ALARMAR |= 0x80000000;
+	// Configure EXTI line 18 in Rising Edge as RTC Alarm interrupt
+	__HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
+	__HAL_RTC_ALARM_EXTI_ENABLE_RISING_EDGE();
+	__HAL_RTC_ALARM_EXTI_ENABLE_IT();
+	// Enable RTC Alarm in NVIC
+	HAL_NVIC_SetPriority(RTC_Alarm_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(RTC_Alarm_IRQn);
 	// set ALRAE to enable Alarm A
 	RTC_CR |= 0x00000100;
 	// reactivate write protection
@@ -563,7 +573,7 @@ uint32_t measureHX711(float* Weight) {
 		FrontRightTab[i]=adcFrontRight.get_units();
 		RearLeftTab[i]=adcRearLeft.get_units();
 		RearRightTab[i]=adcRearRight.get_units();
-		delay_WFI(100);
+		delay(100);
 	}
 
 	// Power down all ADC
