@@ -149,7 +149,6 @@ void loop(void)
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // FUNCTIONS IMPLEMENTATION
 #define STDBY_MODE_N
-
 void GotoLowPower() {
 #ifdef STDBY_MODE
 	uint32_t newSysTickLOAD;
@@ -189,7 +188,6 @@ void GotoLowPower() {
 	SYST_CSR = systick_csr;
 #endif /* STDBY_MODE */
 }
-
 uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
 	tm time, alarm;
 	getRTCDateTime(&time);
@@ -709,6 +707,9 @@ uint32_t initRTC(void) {
     // update date and time in RTC
     setRTCDateTime(time);
 #endif /* RTC_HAL */
+    /* Peripheral interrupt init */
+    HAL_NVIC_SetPriority(RTC_Alarm_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(RTC_Alarm_IRQn);
 	return NO_ERROR;
 }
 

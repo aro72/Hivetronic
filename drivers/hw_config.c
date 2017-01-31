@@ -164,16 +164,16 @@ void SystemClock_Config(void)
   PeriphClkInit.RTCClockSelection = RCC_RTCCLKSOURCE_LSE;
   if (HAL_RCCEx_PeriphCLKConfig(&PeriphClkInit) != HAL_OK)
   {
-	    /* Initialization Error */
-	    while(1);
+      /* Initialization Error */
+      while(1);
   }
 
   /**Configure the main internal regulator output voltage
   */
   if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
   {
-	    /* Initialization Error */
-	    while(1);
+      /* Initialization Error */
+      while(1);
   }
 
 }
@@ -195,6 +195,9 @@ void hw_config_init(void)
 /******************************************************************************/
 /*            Cortex-M4 Processor Exceptions Handlers                         */
 /******************************************************************************/
+
+/* External variables --------------------------------------------------------*/
+extern RTC_HandleTypeDef hrtc;
 
 /**
   * @brief  This function handles NMI exception.
@@ -311,6 +314,8 @@ void RTC_Alarm_IRQHandler(void)
 /**
   * @}
   */
+
+
 #ifdef __cplusplus
 }
 #endif
