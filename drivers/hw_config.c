@@ -292,7 +292,9 @@ void RTC_Alarm_IRQHandler(void)
 
   /* USER CODE END RTC_Alarm_IRQn 0 */
   HAL_RTC_AlarmIRQHandler(&hrtc);
-  printf("Alarm IT Handler\r\n");
+#ifdef DEBUG  
+  printf("\tAlarm IT Handler\r\n");
+#endif /* DEBUG */
   /* USER CODE BEGIN RTC_Alarm_IRQn 1 */
 
   /* USER CODE END RTC_Alarm_IRQn 1 */
