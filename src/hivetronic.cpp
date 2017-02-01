@@ -152,85 +152,46 @@ void loop(void)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // FUNCTIONS IMPLEMENTATION
-#define NEW_WFI_N
-
-uint32_t delay_WFI(uint32_t duration_ms) {
-#ifdef NEW_WFI
-	uint32_t ret=ERROR_WFI, savedLatency, newLatency;
-	uint32_t savedSysclk;
-	uint32_t savedSysTickCTRL, savedSysTickLOAD, savedSysTickVAL, savedSysTickCALIB;
+#define STDBY_MODE_N
+void GotoLowPower() {
+#ifdef STDBY_MODE
 	uint32_t newSysTickLOAD;
-	RCC_ClkInitTypeDef savedClkConfig, newClkConfig;
-	RCC_OscInitTypeDef SavedOscConfig, newOscConfig;
-	RCC_PeriphCLKInitTypeDef savedPeriphClkConfig, newPerighClkConfig;
+	RCC_ClkInitTypeDef LowPowerClkConfig;
+	RCC_OscInitTypeDef LowPowerOscConfig;
+	RCC_PeriphCLKInitTypeDef LowPowerPerighClkConfig;
 
-	/* Save context */
-	savedSysTickCTRL = SysTick->CTRL;
-	savedSysTickLOAD = SysTick->LOAD;
-	savedSysTickVAL = SysTick->VAL;
-	savedSysTickCALIB = SysTick->CALIB;
-	HAL_RCC_GetClockConfig(&savedClkConfig, &savedLatency);
-	HAL_RCC_GetOscConfig(&SavedOscConfig);
-
+	/* Stop SysTick */
+	HAL_SuspendTick();
 	/* Set new clocks configuration to enable LPSLEEP mode */
-	HAL_SuspendTick();
-	newOscConfig.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
-	newOscConfig.LSEState = RCC_LSE_ON;
-	newOscConfig.MSIState = RCC_MSI_ON;
-	newOscConfig.MSIClockRange = RCC_MSIRANGE_4; /* MSI at 1MHz */
-	newOscConfig.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
-	newOscConfig.PLL.PLLState = RCC_PLL_OFF;
-	newClkConfig.ClockType = (RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2);
-	newClkConfig.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
-	newClkConfig.AHBCLKDivider = RCC_SYSCLK_DIV512;
-	newClkConfig.APB1CLKDivider = RCC_HCLK_DIV16;
-	newClkConfig.APB2CLKDivider = RCC_HCLK_DIV16;
-	newLatency = FLASH_LATENCY_0;
-	//HAL_RCC_GetClockConfig(&newClkConfig, &newLatency); /* Switch from PLL to MSI */
-	//HAL_RCC_GetOscConfig(&newOscConfig); /* then, switch off PLL */
-	//HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE2); /* Switch to low power regulator */
-
-	/* Set SysTick for sleep duration in ticks number */
-	newSysTickLOAD = savedSysTickLOAD*duration_ms; /* FIX MAX DURATION */
-	HAL_SYSTICK_Config(newSysTickLOAD); /* FIX THE PARAMETER */
-
-	/* enter WaitForInterrupt */
-	__WFI();
-
-	/* Restore context */
-	HAL_SuspendTick();
-	//HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1); /* Switch to main regulator */
-	//HAL_RCC_OscConfig(&SavedOscConfig); /* start PLL */
-	//HAL_RCC_ClockConfig(&savedClkConfig, savedLatency); /* switch from MSI to PLL */
-	HAL_SYSTICK_Config(savedSysTickLOAD); /* FIX THE PARAMETER */
+	LowPowerOscConfig.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
+	LowPowerOscConfig.LSEState = RCC_LSE_ON;
+	LowPowerOscConfig.MSIState = RCC_MSI_ON;
+	LowPowerOscConfig.MSIClockRange = RCC_MSIRANGE_4; /* MSI at 1MHz */
+	LowPowerOscConfig.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+	LowPowerOscConfig.PLL.PLLState = RCC_PLL_OFF;
+	LowPowerClkConfig.ClockType = (RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2);
+	LowPowerClkConfig.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+	LowPowerClkConfig.AHBCLKDivider = RCC_SYSCLK_DIV512;
+	LowPowerClkConfig.APB1CLKDivider = RCC_HCLK_DIV16;
+	LowPowerClkConfig.APB2CLKDivider = RCC_HCLK_DIV16;
+	HAL_RCC_OscConfig(&LowPowerOscConfig);
+	HAL_RCC_ClockConfig(&LowPowerClkConfig, FLASH_LATENCY_0);
+	/* Switch to Low Power regulator */
+	HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE2);
 
 
-	return ret;
-#else /* NEW_WFI */
-	/* duration_ms is in milliseconds */
-	/* FIX THIS : only works with AHB clock = 64MHz */
-	/* TIM5_PSC = 0x3F - Fck_cnt=Fahb/64=1MHz */
-	/* TIM5_ARR = 0x3E7 - Ftim5=Fck_cnt/1000=1KHz */
-	uint32_t tim5_reload, systick_csr;
-	uint32_t ret=ERROR_WFI;
-	if (duration_ms<(0xFFFFFFFF/1000)) {
-		tim5_reload= duration_ms*1000;
-		TIM5_CR1 &= 0xFFFFFFFE;
-		TIM5_ARR=tim5_reload;
-		TIM5_CR1 |= 0x01;
-		systick_csr = SYST_CSR;
-		SYST_CSR &=0xFFFFFFFD;
-    	__WFI();
-		TIM5_CR1 &= 0xFFFFFFFE;
-		TIM5_ARR=0x000003E7;
-		TIM5_CR1 |= 0x01;
-		SYST_CSR = systick_csr;
-		ret = NO_ERROR;
-	}
-	return ret;
-#endif /* NEW_WFI */
+#else /* STDBY_MODE */
+	uint32_t systick_csr;
+	/* Stop TIM5 and SysTick */
+	TIM5_CR1 &= 0xFFFFFFFE;
+	systick_csr = SYST_CSR;
+	SYST_CSR &=0xFFFFFFFD;
+   	__WFI();
+	/* Stop TIM5 and SysTick */
+	TIM5_CR1 |= 0x01;
+	SYST_CSR = systick_csr;
+#endif /* STDBY_MODE */
 }
-
 uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
 	tm time, alarm;
 	getRTCDateTime(&time);
@@ -238,52 +199,13 @@ uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
 	setAlarm(alarm);
 #ifdef DEBUG_HIVETRONIC
 	printf("Alarm set: %02d:%02d:%02d\r\n", alarm.tm_hour, alarm.tm_min, alarm.tm_sec);
+	printf("Low Power entry ...\r\n");
 #endif /* DEBUG_HIVETRONIC */
-  if (mode==PM_RUN1) {
-		while ((RTC_ISR&0x00000100)!=0x00000100) {
-			// wait for alarm flag
-		}
+	delay(10);
+	GotoLowPower();
 #ifdef DEBUG_HIVETRONIC
-		printf("Alarm fired - flag set RTC_ISR = %lX\r\n", RTC_ISR);
+	printf("\t... Low Power exit\r\n");
 #endif /* DEBUG_HIVETRONIC */
-		RTC_WPR = 0xCA;
-		RTC_WPR = 0x53;
-		delay(50);
-		// clear ALRAE to disable Alarm A
-		RTC_CR &= 0x00000100;
-		// clear ALARAF flag
-		RTC_ISR &= ~0x00000100;
-	}
-	if (mode==PM_SLEEP) {
-#ifdef DEBUG_HIVETRONIC
-		printf("WFI entry ...\r\n");
-#endif /* DEBUG_HIVETRONIC */
-		delay(10);
-		delay_WFI(duration*1000);
-		while ((RTC_ISR&0x00000100)!=0x00000100) {
-			// wait for alarm flag
-#ifdef DEBUG_HIVETRONIC
-			printf("wait RTC_ISR ALARAF\r\n");
-#endif /* DEBUG_HIVETRONIC */
-			delay(1000);
-		}
-#ifdef DEBUG_HIVETRONIC
-		printf("\t... WFI exit\r\n");
-#endif /* DEBUG_HIVETRONIC */
-		RTC_WPR = 0xCA;
-		RTC_WPR = 0x53;
-		delay(50);
-		// clear ALRAE to disable Alarm A
-		RTC_CR &= ~0x00000100;
-		// clear ALARAF flag
-		RTC_ISR &= ~0x00000100;
-	}
-	if (mode==PM_LPSLEEP) {
-#ifdef DEBUG_HIVETRONIC
-		printf("LP Sleep entry ...\r\n");
-		printf("\t... LP Sleep exit\r\n");
-#endif /* DEBUG_HIVETRONIC */
-	}
 	return NO_ERROR;
 }
 
@@ -346,13 +268,22 @@ uint32_t setAlarm(tm alrm) {
 		// wait for ALARAWF set
 	}
 	// clear ALRAE to disable Alarm A
-	RTC_CR &= ~0x00000100;
+	RTC_CR &= ~0x00100100;
+	// enable RTC_ALARM output: OSEL=0b01
+	RTC_CR |= 0x00201000;
 	// clear ALARAF flag
 	RTC_ISR &= ~0x00000100;
 	// set alarm hour:min:sec
 	RTC_ALARMAR = ht<<20 | hu<<16 | mnt<<12 | mnu<<8 | st<<4 | su;
 	// date mask doesn't care
 	RTC_ALARMAR |= 0x80000000;
+	// Configure EXTI line 18 in Rising Edge as RTC Alarm interrupt
+	__HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
+	__HAL_RTC_ALARM_EXTI_ENABLE_RISING_EDGE();
+	__HAL_RTC_ALARM_EXTI_ENABLE_IT();
+	// Enable RTC Alarm in NVIC
+	HAL_NVIC_SetPriority(RTC_Alarm_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(RTC_Alarm_IRQn);
 	// set ALRAE to enable Alarm A
 	RTC_CR |= 0x00000100;
 	// reactivate write protection
@@ -547,10 +478,10 @@ uint32_t handleAckData(uint8_t *AckMessage, uint8_t *AckSize, AckData_t *gwAckDa
 }
 
 uint32_t measureHX711(float* Weight) {
-	uint32_t FrontLeftTab[ADC_NB_SAMPLES];
-	uint32_t FrontRightTab[ADC_NB_SAMPLES];
-	uint32_t RearLeftTab[ADC_NB_SAMPLES];
-	uint32_t RearRightTab[ADC_NB_SAMPLES];
+	int32_t FrontLeftTab[ADC_NB_SAMPLES];
+	int32_t FrontRightTab[ADC_NB_SAMPLES];
+	int32_t RearLeftTab[ADC_NB_SAMPLES];
+	int32_t RearRightTab[ADC_NB_SAMPLES];
 	uint32_t i, start_idx, stop_idx;
 	float FrontLeft_avg, FrontRight_avg, RearLeft_avg, RearRight_avg;
 
@@ -563,11 +494,11 @@ uint32_t measureHX711(float* Weight) {
 
 	// Read ADC for all load cells
 	for (i=0;i<ADC_NB_SAMPLES;i++) {
-		FrontLeftTab[i]=adcFrontLeft.get_units();
-		FrontRightTab[i]=adcFrontRight.get_units();
-		RearLeftTab[i]=adcRearLeft.get_units();
-		RearRightTab[i]=adcRearRight.get_units();
-		delay_WFI(100);
+		FrontLeftTab[i]  = (int32_t)  adcFrontLeft.get_units();
+		FrontRightTab[i] = (int32_t) adcFrontRight.get_units();
+		RearLeftTab[i]   = (int32_t) adcRearLeft.get_units();
+		RearRightTab[i]  = (int32_t) adcRearRight.get_units();
+		delay(100);
 	}
 
 	// Power down all ADC
@@ -716,7 +647,7 @@ uint32_t initRTC(void) {
 	/* Prescaler values are set to get 1Hz clock from LSE (32.768KHz) */
 	hrtc.Init.AsynchPrediv = 127;
 	hrtc.Init.SynchPrediv = 255;
-	hrtc.Init.OutPut = RTC_OUTPUT_WAKEUP;
+	hrtc.Init.OutPut = RTC_OUTPUT_ALARMA;
 	hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
 	hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
 	hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
@@ -780,6 +711,9 @@ uint32_t initRTC(void) {
     // update date and time in RTC
     setRTCDateTime(time);
 #endif /* RTC_HAL */
+    /* Peripheral interrupt init */
+    HAL_NVIC_SetPriority(RTC_Alarm_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(RTC_Alarm_IRQn);
 	return NO_ERROR;
 }
 

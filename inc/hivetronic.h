@@ -22,6 +22,7 @@
 #include "error.h"
 #include "power.h"
 #include "sorting.h"
+#include "stm32l4xx_ll_exti.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GLOBAL CONFIGURATIONS
@@ -237,6 +238,6 @@ uint32_t configureClock(void);
 uint32_t enterLowPower(uint32_t mode, uint32_t duration);
 uint32_t addDateTime(tm* endtime, tm starttime, uint32_t duration);
 uint32_t setAlarm(tm alrm);
+void GotoLowPower(void);
 void Error_Handler(uint32_t error_code);
-
 #endif /* HIVETRONIC_H_ */

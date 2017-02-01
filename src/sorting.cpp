@@ -7,8 +7,8 @@
 
 #include "sorting.h"
 
-void merge (uint32_t *a, uint32_t n, uint32_t m) {
-	uint32_t i, j, k;
+void merge (int32_t *a, uint32_t n, uint32_t m) {
+    uint32_t i, j, k;
     uint32_t *x = (uint32_t*) malloc(n * sizeof (uint32_t));
     for (i = 0, j = m, k = 0; k < n; k++) {
         x[k] = j == n      ? a[i++]
@@ -22,7 +22,7 @@ void merge (uint32_t *a, uint32_t n, uint32_t m) {
     free(x);
 }
  
-void merge_sort (uint32_t *a, uint32_t n) {
+void merge_sort (int32_t *a, uint32_t n) {
     if (n < 2)
         return;
     uint32_t m = n / 2;
