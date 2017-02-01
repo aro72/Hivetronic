@@ -23,6 +23,7 @@
 #include "power.h"
 #include "sorting.h"
 #include "stm32l4xx_ll_exti.h"
+#include "hw_config.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GLOBAL CONFIGURATIONS
@@ -70,6 +71,8 @@
 #define PM_STANDBY			8
 #define PM_SHUTDOWN			9
 #define PM_VBAT				10
+#define STDBY_MODE
+
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -88,8 +91,8 @@
  * Temp_Effect = 10x ADC_SCALE
  */
 #define	LOADCELL_TEMP_EFFECT	330*4
-#define ADC_AVG_NB				32
-#define ADC_NB_SAMPLES			24
+#define ADC_AVG_NB				16
+#define ADC_NB_SAMPLES			8
 #define ADC_DROPPED_SAMPLES		12
 #define ADC_POWER_UP_MS			600
 #define LORA_CORRECT_PACKET		0

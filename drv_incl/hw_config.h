@@ -51,6 +51,7 @@
 /* Exported macro ------------------------------------------------------------*/
 /* Exported functions ------------------------------------------------------- */
 void hw_config_init(void);
+void SystemClock_Config(void);
 
 #ifdef __cplusplus
 }
