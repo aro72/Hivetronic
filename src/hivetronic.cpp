@@ -154,9 +154,6 @@ void GotoLowPower() {
 	RCC_ClkInitTypeDef LowPowerClkConfig;
 	RCC_OscInitTypeDef LowPowerOscConfig;
 
-	/* Save context */
-	HAL_RCC_GetClockConfig(&savedClkConfig, &savedLatency);
-	HAL_RCC_GetOscConfig(&SavedOscConfig);
 	/* Set new clocks configuration to enable low power mode */
 	LowPowerOscConfig.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
 	LowPowerOscConfig.LSEState = RCC_LSE_ON;
@@ -184,6 +181,8 @@ void GotoLowPower() {
 
 	/* Enter low power mode */
 	HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+	//HAL_PWR_EnterSTANDBYMode();
+	//HAL_PWREx_EnterSHUTDOWNMode();
 
 	/* Switch back to main regulator */
 	//HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
