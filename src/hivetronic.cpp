@@ -330,6 +330,10 @@ uint32_t setRTCDateTime(tm time) {
 
 	RTC_PRER = 0x007F00FF;
 
+    // Select RTC_ALARM_OUT on PC13
+    RTC_CR |= 0x00300000;
+    RTC_CR &= ~0x00400000;
+
 	// Load the initial time and date values in the shadow registers (RTC_TR and RTC_DR)
 	st = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_sec/10));
 	su = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_sec - 10*st));
