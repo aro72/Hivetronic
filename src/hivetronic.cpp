@@ -142,65 +142,76 @@ void loop(void)
 			handleAckData(AckMessage, &AckSize, &gwAckData);
 		}
 		//delay(inactiveDuration);
-		enterLowPower(PM_SLEEP, inactiveDuration);
+		enterLowPower(LOW_POWER_MODE, inactiveDuration);
 	}
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // FUNCTIONS IMPLEMENTATION
-void GotoLowPower() {
-#ifdef STDBY_MODE
-	uint32_t savedLatency;
-	RCC_ClkInitTypeDef LowPowerClkConfig;
-	RCC_OscInitTypeDef LowPowerOscConfig;
+void GotoLowPower(uint32_t LowPowerMode) {
+	if (LowPowerMode==PM_SLEEP) {
+		uint32_t systick_csr;
+		/* Stop TIM5 and SysTick */
+		TIM5_CR1 &= 0xFFFFFFFE;
+		systick_csr = SYST_CSR;
+		SYST_CSR &=0xFFFFFFFD;
+	   	__WFI();
+		/* Stop TIM5 and SysTick */
+		TIM5_CR1 |= 0x01;
+		SYST_CSR = systick_csr;
+	}
+	else {
+		RCC_ClkInitTypeDef LowPowerClkConfig;
+		RCC_OscInitTypeDef LowPowerOscConfig;
 
-	/* Set new clocks configuration to enable low power mode */
-	LowPowerOscConfig.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
-	LowPowerOscConfig.LSEState = RCC_LSE_ON;
-	LowPowerOscConfig.MSIState = RCC_MSI_ON;
-	LowPowerOscConfig.MSIClockRange = RCC_MSIRANGE_4; /* MSI at 1MHz */
-	LowPowerOscConfig.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
-	LowPowerOscConfig.PLL.PLLState = RCC_PLL_ON;
-	LowPowerClkConfig.ClockType = (RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2);
-	LowPowerClkConfig.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
-	LowPowerClkConfig.AHBCLKDivider = RCC_SYSCLK_DIV1;
-	LowPowerClkConfig.APB1CLKDivider = RCC_HCLK_DIV1;
-	LowPowerClkConfig.APB2CLKDivider = RCC_HCLK_DIV1;
-	HAL_RCC_OscConfig(&LowPowerOscConfig); /* Configure clocks */
-	HAL_RCC_ClockConfig(&LowPowerClkConfig, FLASH_LATENCY_0); /* Switch to MSI */
-	/* Disable PLL */
-	LowPowerOscConfig.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
-	LowPowerOscConfig.LSEState = RCC_LSE_ON;
-	LowPowerOscConfig.MSIState = RCC_MSI_ON;
-	LowPowerOscConfig.MSIClockRange = RCC_MSIRANGE_4; /* MSI at 1MHz */
-	LowPowerOscConfig.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
-	LowPowerOscConfig.PLL.PLLState = RCC_PLL_OFF;
-	HAL_RCC_OscConfig(&LowPowerOscConfig); /* Configure clocks */
-	/* Stop SysTick */
-	HAL_SuspendTick();
+		/* Set new clocks configuration to enable low power mode */
+		LowPowerOscConfig.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
+		LowPowerOscConfig.LSEState = RCC_LSE_ON;
+		LowPowerOscConfig.MSIState = RCC_MSI_ON;
+		LowPowerOscConfig.MSIClockRange = RCC_MSIRANGE_4; /* MSI at 1MHz */
+		LowPowerOscConfig.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+		LowPowerOscConfig.PLL.PLLState = RCC_PLL_ON;
+		LowPowerClkConfig.ClockType = (RCC_CLOCKTYPE_SYSCLK | RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2);
+		LowPowerClkConfig.SYSCLKSource = RCC_SYSCLKSOURCE_MSI;
+		LowPowerClkConfig.AHBCLKDivider = RCC_SYSCLK_DIV1;
+		LowPowerClkConfig.APB1CLKDivider = RCC_HCLK_DIV1;
+		LowPowerClkConfig.APB2CLKDivider = RCC_HCLK_DIV1;
+		HAL_RCC_OscConfig(&LowPowerOscConfig); /* Configure clocks */
+		HAL_RCC_ClockConfig(&LowPowerClkConfig, FLASH_LATENCY_0); /* Switch to MSI */
+		/* Disable PLL */
+		LowPowerOscConfig.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
+		LowPowerOscConfig.LSEState = RCC_LSE_ON;
+		LowPowerOscConfig.MSIState = RCC_MSI_ON;
+		LowPowerOscConfig.MSIClockRange = RCC_MSIRANGE_4; /* MSI at 1MHz */
+		LowPowerOscConfig.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
+		LowPowerOscConfig.PLL.PLLState = RCC_PLL_OFF;
+		HAL_RCC_OscConfig(&LowPowerOscConfig); /* Configure clocks */
+		/* Stop SysTick */
+		HAL_SuspendTick();
 
-	/* Enter low power mode */
-	HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
-	//HAL_PWR_EnterSTANDBYMode();
-	//HAL_PWREx_EnterSHUTDOWNMode();
+		/* Enter low power mode */
+		switch (LowPowerMode) {
+		case PM_STOP2:
+			HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
+			break;
+		case PM_STANDBY:
+			HAL_PWR_EnterSTANDBYMode();
+			break;
+		case PM_SHUTDOWN:
+			HAL_PWREx_EnterSHUTDOWNMode();
+			break;
+		default:
+			Error_Handler(ERROR_PMMODE);
+			break;
+		}
 
-	/* Switch back to main regulator */
-	//HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
-	/* Restore clocks configuration */
-	SystemClock_Config();
-	/* Restart SysTick and TIM5 */
-	HAL_ResumeTick();
-#else /* STDBY_MODE */
-	uint32_t systick_csr;
-	/* Stop TIM5 and SysTick */
-	TIM5_CR1 &= 0xFFFFFFFE;
-	systick_csr = SYST_CSR;
-	SYST_CSR &=0xFFFFFFFD;
-   	__WFI();
-	/* Stop TIM5 and SysTick */
-	TIM5_CR1 |= 0x01;
-	SYST_CSR = systick_csr;
-#endif /* STDBY_MODE */
+		/* Switch back to main regulator */
+		//HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1);
+		/* Restore clocks configuration */
+		SystemClock_Config();
+		/* Restart SysTick and TIM5 */
+		HAL_ResumeTick();
+	}
 }
 uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
 	tm time, alarm;
@@ -212,7 +223,7 @@ uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
 	printf("Low Power entry ...\r\n");
 #endif /* DEBUG_HIVETRONIC */
 	delay(10);
-	GotoLowPower();
+	GotoLowPower(mode);
 #ifdef DEBUG_HIVETRONIC
 	printf("... Low Power exit\r\n");
 #endif /* DEBUG_HIVETRONIC */
