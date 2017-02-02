@@ -519,7 +519,10 @@ uint32_t measureHX711(float* Weight) {
 		FrontRightTab[i] = (int32_t) adcFrontRight.get_units();
 		RearLeftTab[i]   = (int32_t) adcRearLeft.get_units();
 		RearRightTab[i]  = (int32_t) adcRearRight.get_units();
-		delay(100);
+		if (i!=(ADC_NB_SAMPLES-1)) {
+			delay(100);
+		}
+
 	}
 
 	// Power down all ADC
