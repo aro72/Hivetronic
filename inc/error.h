@@ -22,4 +22,5 @@
 #define ERROR_SETDATE		8
 #define ERROR_GETTIME		9
 #define ERROR_GETDATE		10
+#define ERROR_PMMODE		11
 #endif /* ERROR_H_ */

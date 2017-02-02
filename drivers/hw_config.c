@@ -92,7 +92,7 @@
   * @{
   */
 
-static void SystemClock_Config(void);
+void SystemClock_Config(void);
 
 /**
   * @}
@@ -130,7 +130,6 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
   RCC_OscInitStruct.LSEState = RCC_LSE_ON;
   RCC_OscInitStruct.MSIState = RCC_MSI_ON;
-
   RCC_OscInitStruct.MSIClockRange = RCC_MSIRANGE_6;
   RCC_OscInitStruct.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
@@ -140,7 +139,6 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLR = 2;
   RCC_OscInitStruct.PLL.PLLP = 7;
   RCC_OscInitStruct.PLL.PLLQ = 4;
-
   if(HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     /* Initialization Error */
@@ -295,7 +293,7 @@ void RTC_Alarm_IRQHandler(void)
 
   /* USER CODE END RTC_Alarm_IRQn 0 */
   HAL_RTC_AlarmIRQHandler(&hrtc);
-#ifdef DEBUG  
+#ifdef DEBUG
   printf("\tAlarm IT Handler\r\n");
 #endif /* DEBUG */
   /* USER CODE BEGIN RTC_Alarm_IRQn 1 */
