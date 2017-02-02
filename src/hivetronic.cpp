@@ -160,7 +160,8 @@ void GotoLowPower(uint32_t LowPowerMode) {
 	else {
 		RCC_ClkInitTypeDef LowPowerClkConfig;
 		RCC_OscInitTypeDef LowPowerOscConfig;
-
+		/* Stop SysTick */
+		HAL_SuspendTick();
 		/* Set new clocks configuration to enable low power mode */
 		LowPowerOscConfig.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
 		LowPowerOscConfig.LSEState = RCC_LSE_ON;
@@ -183,8 +184,6 @@ void GotoLowPower(uint32_t LowPowerMode) {
 		LowPowerOscConfig.MSICalibrationValue = RCC_MSICALIBRATION_DEFAULT;
 		LowPowerOscConfig.PLL.PLLState = RCC_PLL_OFF;
 		HAL_RCC_OscConfig(&LowPowerOscConfig); /* Configure clocks */
-		/* Stop SysTick */
-		HAL_SuspendTick();
 
 		/* Enter low power mode */
 		WakeUpFlag = 0;
@@ -215,12 +214,12 @@ uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
 	tm time, alarm;
 	getRTCDateTime(&time);
 	addDateTime(&alarm, time, duration);
-	setAlarm(alarm);
 #ifdef DEBUG_HIVETRONIC
 	printf("Alarm set: %02d:%02d:%02d\r\n", alarm.tm_hour, alarm.tm_min, alarm.tm_sec);
 	printf("Low Power entry ...\r\n");
 #endif /* DEBUG_HIVETRONIC */
-	delay(10);
+	//delay(10);
+	setAlarm(alarm);
 	GotoLowPower(mode);
 #ifdef DEBUG_HIVETRONIC
 	printf("... Low Power exit\r\n");
