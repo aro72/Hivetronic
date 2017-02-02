@@ -44,19 +44,16 @@ int loraMode = LORAMODE;
 uint32_t seq = 0;
 uint32_t inactiveDuration = LORA_REPORTING_PERIOD-PROCESSING_DURATION;
 RTC_HandleTypeDef hrtc;
+uint32_t WakeUpFlag=0, PullUpGPIOA;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Setup function
 
 void setup() {
-	// Set clock config
-	// SYSCLK = 48MHz from MSI
-	// AHB = 1MHz
-	// APB = 1MHz
 
 	// Open serial communications and wait for port to open:
-	Serial.begin(38400);
-	delay(100);
+	Serial.begin(115200);
+	delay(10);
 	// Print a start message
 #ifdef DEBUG_HIVETRONIC
 	printf("\r\n\r\n");
@@ -65,7 +62,7 @@ void setup() {
 	printf("Hive monitor using HX711 and LoRa\r\n");
 	printf("ARM (STM32)\r\n");
 #endif /* DEBUG_HIVETRONIC */
-	configureClock();
+	//configureClock();
 	initDHT();
 	initADC();
 	initRTC();
@@ -97,7 +94,7 @@ void loop(void)
 	while (1) {
 #ifdef DEBUG_HIVETRONIC
 		printf("\r\n");
-		printf("////////////////////////////////////\r\n");
+		printf("-------------\r\n");
 #endif /* DEBUG_HIVETRONIC */
 		// measure temperature
 		measureTempHum(&Temp, &Hum);
@@ -190,6 +187,7 @@ void GotoLowPower(uint32_t LowPowerMode) {
 		HAL_SuspendTick();
 
 		/* Enter low power mode */
+		WakeUpFlag = 0;
 		switch (LowPowerMode) {
 		case PM_STOP2:
 			HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
@@ -733,7 +731,10 @@ uint32_t initRTC(void) {
     // set RTCEN
     RCC_BDCR |= 0x00008000;
     // update date and time in RTC
-    setRTCDateTime(time);
+	if (RTC_DR==0x00002101) {
+		setRTCDateTime(time);
+	}
+
 #endif /* RTC_HAL */
     /* Peripheral interrupt init */
     HAL_NVIC_SetPriority(RTC_Alarm_IRQn, 0, 0);
@@ -840,4 +841,36 @@ void Error_Handler(uint32_t error_code) {
 	while(1) {
 		/* infinite loop */
 	}
+}
+
+void WakeUp() {
+	if (LL_PWR_IsActiveFlag_SB()) {
+		LL_PWR_ClearFlag_SB();
+		WakeUpFlag |= 1;
+	}
+	if (LL_PWR_IsActiveFlag_InternWU()) {
+		WakeUpFlag |= 2;
+	}
+	/* Get the pending status of the AlarmA Interrupt */
+	if(__HAL_RTC_ALARM_GET_FLAG(&hrtc, RTC_FLAG_ALRAF) != RESET) {
+	  /* AlarmA callback */
+	  printf("AlarmA IT flag at wake-up");
+	  /* Clear the AlarmA interrupt pending bit */
+	  __HAL_RTC_ALARM_CLEAR_FLAG(&hrtc, RTC_FLAG_ALRAF);
+	 }
+	__HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
+	PullUpGPIOA = LL_PWR_ReadReg(PUCRA);
+	if ((PullUpGPIOA!=PWR_GPIOA_PULLUP) && (WakeUpFlag==2)) {
+		printf("... Wake-up from Shutdown");
+	} else {
+		printf("%ld - %ld", PullUpGPIOA, WakeUpFlag);
+		printf("... Wake-up from Standby");
+	}
+}
+
+void initGPIO(void) {
+	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_A, PWR_GPIOA_PULLUP);
+	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_B, PWR_GPIOB_PULLUP);
+	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_C, PWR_GPIOC_PULLUP);
+	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_D, PWR_GPIOD_PULLUP);
 }

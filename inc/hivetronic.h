@@ -21,6 +21,7 @@
 #include "stm32l4xx_hal.h"
 #include "error.h"
 #include "power.h"
+#include "stm32l4xx_ll_pwr.h"
 #include "sorting.h"
 #include "stm32l4xx_ll_exti.h"
 #include "hw_config.h"
@@ -99,7 +100,10 @@
 #define ACK_NTP_CODE			0x01
 #define ACK_PERIOD_CODE			0x02
 
-
+#define PWR_GPIOA_PULLUP 	(PWR_GPIO_BIT_15|PWR_GPIO_BIT_13|PWR_GPIO_BIT_12|PWR_GPIO_BIT_11|PWR_GPIO_BIT_0)
+#define PWR_GPIOB_PULLUP 	(PWR_GPIO_BIT_15|PWR_GPIO_BIT_14|PWR_GPIO_BIT_13|PWR_GPIO_BIT_12|PWR_GPIO_BIT_11|PWR_GPIO_BIT_2|PWR_GPIO_BIT_1)
+#define PWR_GPIOC_PULLUP 	(PWR_GPIO_BIT_15|PWR_GPIO_BIT_14|PWR_GPIO_BIT_13|PWR_GPIO_BIT_12|PWR_GPIO_BIT_10|PWR_GPIO_BIT_8|PWR_GPIO_BIT_6|PWR_GPIO_BIT_5|PWR_GPIO_BIT_4|PWR_GPIO_BIT_3|PWR_GPIO_BIT_2)
+#define PWR_GPIOD_PULLUP 	(PWR_GPIO_BIT_2)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // TYPE DEFINITION
