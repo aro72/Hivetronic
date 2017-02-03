@@ -19,6 +19,7 @@
 
 #define ARDUINO_MAIN
 #include "Arduino.h"
+#include "stm32l4xx_ll_pwr.h"
 
 /*
  * Cortex-M3 Systick IT handler
@@ -36,31 +37,43 @@ extern void SysTick_Handler( void )
 void initVariant() __attribute__((weak));
 void initVariant() { }
 
+extern void WakeUp();
+extern void initGPIO();
+
 /*
  * \brief Main entry point of Arduino application
  */
 int main( void )
 {
-	// Initialize watchdog
-	//watchdogSetup();
+  // Initialize watchdog
+  //watchdogSetup();
 
-	init();
+  init();
 
-	initVariant();
+  initVariant();
 
-	delay(1);
+  delay(1);
 
 #if defined(USBCON)
-	USBDevice.attach();
+  USBDevice.attach();
 #endif
 
-	setup();
+  if (LL_PWR_IsActiveFlag_SB() || LL_PWR_IsActiveFlag_InternWU()) {
+     WakeUp();
+  }
 
-	for (;;)
-	{
-		loop();
-		if (serialEventRun) serialEventRun();
-	}
+  initGPIO();
 
-	return 0;
+    /* GPIO Pull-up  /Pull-down configuration */
+
+  setup();
+
+  for (;;)
+  {
+    loop();
+    if (serialEventRun) serialEventRun();
+  }
+
+  return 0;
 }
+
