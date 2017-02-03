@@ -501,7 +501,7 @@ uint32_t measureHX711(float* Weight) {
 	int32_t RearLeftTab[ADC_NB_SAMPLES];
 	int32_t RearRightTab[ADC_NB_SAMPLES];
 	uint32_t i, start_idx, stop_idx;
-	float FrontLeft_avg, FrontRight_avg, RearLeft_avg, RearRight_avg;
+	float FrontLeft_avg=0, FrontRight_avg=0, RearLeft_avg=0, RearRight_avg=0;
 
 	// Power up all ADC
 	adcFrontLeft.power_up();
