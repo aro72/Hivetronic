@@ -56,16 +56,15 @@ void setup() {
 	delay(10);
 	// Print a start message
 #ifdef DEBUG_HIVETRONIC
-	printf("\r\n\r\n");
+	printf("\r\n\r\n\n\r");
 	printf("////////////////////////////////////\r\n");
 	printf("\r\n");
 	printf("Hive monitor using HX711 and LoRa\r\n");
 	printf("ARM (STM32)\r\n");
 #endif /* DEBUG_HIVETRONIC */
-	//configureClock();
-	initDHT();
 	initADC();
 	initRTC();
+	initDHT();
 #ifdef LORA_ENABLED
 	initLoRa();
 #endif
@@ -99,6 +98,10 @@ void loop(void)
 		// measure temperature
 		measureTempHum(&Temp, &Hum);
 		measureHX711(&Weight);
+		/*
+		* remove temp adjustment as long as calibration and 
+		* recording of a fixed weight at different temperature is not available
+		*/
 		// adjustWeight(&Weight, Temp);
 		getRTCDateTime(&time);
 		sprintf(cDateTime, "%02d/%02d/%4d-%02d:%02d:%02d",
@@ -226,21 +229,6 @@ uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
 #endif /* DEBUG_HIVETRONIC */
 	return NO_ERROR;
 }
-
-uint32_t configureClock(void) {
-	uint32_t ret=NO_ERROR;
-	// set SYSCLK
-	//RCC_CR &= ˜0xFFFFFF0F;
-	//RCC_CR |= =0x0000005F, // MSI range: 2MHz
-	RCC_PLLSAI1CFGR = 0x00000000;
-	RCC_PLLSAI2CFGR = 0x00000000;
-	// set Cortex-M4 SysTick
-	// set Range 2 voltage
-    RCC_APB1ENR1 |= 0x10000000;
-	//PWR_CR1 = 0x00004700;
-	return ret;
-}
-
 
 uint32_t addDateTime(tm* endtime, tm starttime, uint32_t duration) {
 	/* duration is in seconds */
@@ -504,11 +492,13 @@ uint32_t measureHX711(float* Weight) {
 	float FrontLeft_avg=0, FrontRight_avg=0, RearLeft_avg=0, RearRight_avg=0;
 
 	// Power up all ADC
+	/* No need to power-up as, this is done in initADC  at each wake-up from standby-shutdown
 	adcFrontLeft.power_up();
 	adcFrontRight.power_up();
 	adcRearLeft.power_up();
 	adcRearRight.power_up();
 	delay(ADC_POWER_UP_MS);
+	*/
 
 	// Read ADC for all load cells
 	for (i=0;i<ADC_NB_SAMPLES;i++) {
@@ -522,7 +512,7 @@ uint32_t measureHX711(float* Weight) {
 
 	}
 
-	// Power down all ADC
+	// Power down all ADC to decrease power consumption
 	adcFrontLeft.power_down();
 	adcFrontRight.power_down();
 	adcRearLeft.power_down();
@@ -618,6 +608,7 @@ uint32_t adjustWeight(float* Weight, float T) {
 	*Weight = *Weight - deltaWeight;
 	return ret;
 }
+
 uint32_t measureTempHum(float* T, float* H) {
 	float t=0, h=0;
 	uint32_t ret=NO_ERROR;
@@ -644,14 +635,8 @@ uint32_t measureTempHum(float* T, float* H) {
 }
 
 uint32_t initDHT(void) {
-#ifdef DEBUG_HIVETRONIC
-	printf("initializing DHT22 sensor ...\r\n");
-#endif /* DEBUG_HIVETRONIC*/
 	Wire.begin();
 	dht.begin();
-#ifdef DEBUG_HIVETRONIC
-	printf("... init done\r\n");
-#endif /* DEBUG_HIVETRONIC*/
 	return NO_ERROR;
 }
 
@@ -768,7 +753,7 @@ uint32_t initADC(void) {
 	// Settling time is 400ms at 10Hz to get a stable output
 	// As first readings are executed to configure next readings, no need to have stable output
 	// During initial phase of the project, it is anyway better to wait for stable output
-	delay(500);
+	delay(400);
 	// Set offset
 	adcFrontLeft.set_offset(ADC_OFFSET_FRONT_LEFT);
 	adcFrontRight.set_offset(ADC_OFFSET_FRONT_RIGHT);
@@ -785,10 +770,12 @@ uint32_t initADC(void) {
 	adc[2]=adcRearLeft.get_units();
 	adc[3]=adcRearRight.get_units();
 	// Power down all ADC
+	/* No need to power down as init will be done after each and every standby-shutdown
 	adcFrontLeft.power_down();
 	adcFrontRight.power_down();
 	adcRearLeft.power_down();
 	adcRearRight.power_down();
+	*/
 #ifdef DEBUG_HIVETRONIC
 	printf("\tFrontLeft:\t%ld\r\n",adc[0]);
 	printf("\tFrontRight:\t%ld\r\n",adc[1]);
@@ -829,14 +816,16 @@ uint32_t initLoRa(void) {
 	ret = sx1272.setNodeAddress(LORA_NODE_ADDR);
 #ifdef DEBUG_HIVETRONIC
 	printf("Setting node addr: state %d\r\n", ret);
-	// Print a success message
 	printf("SX1272/76 successfully configured\r\n");
 #endif /* DEBUG_HIVETRONIC*/
 	return NO_ERROR;
 }
 
 void Error_Handler(uint32_t error_code) {
+#ifdef DEBUG_HIVETRONIC
 	printf("\n\n !!!!!! Error_Handler - Code %2ld !!!!!!\r\n",error_code);
+#endif /* DEBUG_HIVETRONIC*/
+	/* TODO send error code using LoRa */
 	while(1) {
 		/* infinite loop */
 	}
@@ -853,18 +842,22 @@ void WakeUp() {
 	/* Get the pending status of the AlarmA Interrupt */
 	if(__HAL_RTC_ALARM_GET_FLAG(&hrtc, RTC_FLAG_ALRAF) != RESET) {
 	  /* AlarmA callback */
+#ifdef DEBUG_HIVETRONIC
 	  printf("AlarmA IT flag at wake-up");
+#endif /* DEBUG_HIVETRONIC*/
 	  /* Clear the AlarmA interrupt pending bit */
 	  __HAL_RTC_ALARM_CLEAR_FLAG(&hrtc, RTC_FLAG_ALRAF);
 	 }
 	__HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
 	PullUpGPIOA = LL_PWR_ReadReg(PUCRA);
+#ifdef DEBUG_HIVETRONIC
 	if ((PullUpGPIOA!=PWR_GPIOA_PULLUP) && (WakeUpFlag==2)) {
 		printf("... Wake-up from Shutdown");
 	} else {
 		printf("%ld - %ld", PullUpGPIOA, WakeUpFlag);
 		printf("... Wake-up from Standby");
 	}
+#endif /* DEBUG_HIVETRONIC*/
 }
 
 void initGPIO(void) {
