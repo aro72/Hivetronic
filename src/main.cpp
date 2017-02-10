@@ -39,6 +39,7 @@ void initVariant() { }
 
 extern void WakeUp();
 extern void initGPIO();
+extern void MX_ADC1_Init(void);
 
 /*
  * \brief Main entry point of Arduino application
@@ -63,6 +64,7 @@ int main( void )
   }
 
   initGPIO();
+  MX_ADC1_Init();
 
     /* GPIO Pull-up  /Pull-down configuration */
 
