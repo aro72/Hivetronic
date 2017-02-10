@@ -284,9 +284,12 @@ uint32_t setAlarm(tm alrm) {
 	// date mask doesn't care
 	RTC_ALARMAR |= 0x80000000;
 	// Configure EXTI line 18 in Rising Edge as RTC Alarm interrupt
-	__HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
-	__HAL_RTC_ALARM_EXTI_ENABLE_RISING_EDGE();
-	__HAL_RTC_ALARM_EXTI_ENABLE_IT();
+	__HAL_PWR_CLEAR_FLAG(PWR_FLAG_WUF5);
+	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH); /* Wake-up 5 = PC5 */
+	HAL_PWREx_DisableInternalWakeUpLine();
+	//__HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
+	//__HAL_RTC_ALARM_EXTI_ENABLE_RISING_EDGE();
+	//__HAL_RTC_ALARM_EXTI_ENABLE_IT();
 	// Enable RTC Alarm in NVIC
 	HAL_NVIC_SetPriority(RTC_Alarm_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(RTC_Alarm_IRQn);
