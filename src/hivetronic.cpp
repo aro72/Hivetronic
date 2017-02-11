@@ -79,6 +79,7 @@ void setup() {
 void loop(void)
 {
 	uint32_t r_size;
+	uint16_t VbatADC;
 	int ret;
 	uint8_t message[100]={0}, AckMessage[100]={0};
 	AckData_t gwAckData;
@@ -86,6 +87,7 @@ void loop(void)
 	float Temp = NAN;
 	float Hum = NAN;
 	float Weight = NAN;
+	float Vbat=0;
 	tm time;
 	char cDateTime[26];
 	// FIX THIS - Is it really needed ???
@@ -100,6 +102,11 @@ void loop(void)
 		// measure temperature
 		measureTempHum(&Temp, &Hum);
 		measureHX711(&Weight);
+		measureVbat(&VbatADC);
+		Vbat = 3*3.3*VbatADC/4095; /* Vbat/3, 12-bit resolution, Vref+=3.3V */
+#ifdef DEBUG_HIVETRONIC
+		printf("Vbat=%1.3fV\r\n",Vbat);
+#endif
 		/*
 		* remove temp adjustment as long as calibration and 
 		* recording of a fixed weight at different temperature is not available
@@ -881,14 +888,19 @@ void MX_ADC1_Init(void)
 
   __HAL_RCC_ADC_CLK_ENABLE();
 
-    /**Common config 
+    /**Common config
     */
   hadc1.Instance = ADC1;
+  if (HAL_ADC_DeInit(&hadc1) != HAL_OK)
+  {
+    /* ADC de-initialization Error */
+    Error_Handler(ERROR_ADC_INIT);
+  }
   hadc1.Init.ClockPrescaler = ADC_CLOCK_ASYNC_DIV1;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
   hadc1.Init.ScanConvMode = ADC_SCAN_DISABLE;
-  hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
+  hadc1.Init.EOCSelection = ADC_EOC_SEQ_CONV;
   hadc1.Init.LowPowerAutoWait = DISABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.NbrOfConversion = 1;
@@ -901,29 +913,56 @@ void MX_ADC1_Init(void)
   hadc1.Init.OversamplingMode = DISABLE;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
   {
-    Error_Handler(ERROR_ADC);
+    Error_Handler(ERROR_ADC_INIT);
   }
 
-    /**Configure the ADC multi-mode 
+    /**Configure the ADC multi-mode
     */
   multimode.Mode = ADC_MODE_INDEPENDENT;
   if (HAL_ADCEx_MultiModeConfigChannel(&hadc1, &multimode) != HAL_OK)
   {
-    Error_Handler(ERROR_ADC);
+    Error_Handler(ERROR_ADC_INIT);
   }
 
-    /**Configure Regular Channel 
+    /**Configure Regular Channel
     */
   sConfig.Channel = ADC_CHANNEL_VBAT;
+  //sConfig.Channel = ADC_CHANNEL_VREFINT;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_2CYCLES_5;
+  sConfig.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
   sConfig.OffsetNumber = ADC_OFFSET_NONE;
   sConfig.Offset = 0;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
-    Error_Handler(ERROR_ADC);
+    Error_Handler(ERROR_ADC_INIT);
   }
 
+}
+
+uint32_t measureVbat(uint16_t *VbatADC) {
+  uint16_t ADCvalue;
+  if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) !=  HAL_OK)
+  {
+    /* ADC Calibration Error */
+    Error_Handler(ERROR_ADC_CAL);
+  }
+
+  __HAL_ADC_CLEAR_FLAG(&hadc1, ADC_FLAG_EOS);
+
+  if (HAL_ADC_Start(&hadc1) != HAL_OK)
+  {
+    /* Start Conversation Error */
+    Error_Handler(ERROR_ADC_START);
+  }
+  if (HAL_ADC_PollForConversion(&hadc1, 100) != HAL_OK)
+  {
+    /* End Of Conversion flag not set on time */
+    Error_Handler(ERROR_ADC_CONV);
+  }
+  ADCvalue = HAL_ADC_GetValue(&hadc1);
+  HAL_ADC_Stop(&hadc1);
+  *VbatADC = ADCvalue;
+  return NO_ERROR;
 }
 

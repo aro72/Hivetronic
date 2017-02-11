@@ -23,6 +23,9 @@
 #define ERROR_GETTIME		9
 #define ERROR_GETDATE		10
 #define ERROR_PMMODE		11
-#define ERROR_ADC			12
+#define ERROR_ADC_CAL		12
+#define ERROR_ADC_START		13
+#define ERROR_ADC_CONV		14
+#define ERROR_ADC_INIT		15
 
 #endif /* ERROR_H_ */
