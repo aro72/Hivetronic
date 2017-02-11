@@ -104,9 +104,6 @@ void loop(void)
 		measureHX711(&Weight);
 		measureVbat(&VbatADC);
 		Vbat = 3*3.3*VbatADC/4095; /* Vbat/3, 12-bit resolution, Vref+=3.3V */
-#ifdef DEBUG_HIVETRONIC
-		printf("Vbat=%1.3fV\r\n",Vbat);
-#endif
 		/*
 		* remove temp adjustment as long as calibration and 
 		* recording of a fixed weight at different temperature is not available
@@ -124,10 +121,11 @@ void loop(void)
     	String strH(Hum, 2);
     	String strW(Weight, 3);
     	String strSeq(seq, 10);
+    	String strVbat(Vbat,3);
     	String strTime(cDateTime);
     	String messageData;
 
-      	messageData = strTime + " - Seq: " + strSeq + " - T=" + strT + " - H=" + strH + " - W=" + strW;
+      	messageData = strTime + " - Vbat=" + strVbat + " - T=" + strT + " - H=" + strH + " - W=" + strW;
     	r_size = strlen(messageData.c_str());
     	for (uint32_t i = 0; i < r_size; i++) {
 			message[i] = (uint8_t) messageData.c_str()[i];
