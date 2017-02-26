@@ -24,6 +24,7 @@
 #include "stm32l4xx_ll_pwr.h"
 #include "sorting.h"
 #include "stm32l4xx_ll_exti.h"
+#include "stm32l4xx_ll_adc.h"
 #include "hw_config.h"
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -33,7 +34,7 @@
 #define LORAMODE  				4
 #define LORAPOWER 				'x'
 #define LORA_NODE_ADDR 			8
-#define LORA_REPORTING_PERIOD	10 // in second
+#define LORA_REPORTING_PERIOD	20 // in second
 #define PROCESSING_DURATION 	5 // FIX THIS: to be measured and updated
 // HX711  CONFIGURATION
 #define HX711_GAIN				128
@@ -79,21 +80,21 @@
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // OTHER DEFINES
 #define DHTTYPE 				DHT22
-/* Calibration at 21.0C with 8s delay after power up */
-#define ADC_OFFSET_FRONT_LEFT 	-163050
-#define ADC_OFFSET_FRONT_RIGHT 	86050
-#define ADC_OFFSET_REAR_RIGHT 	160110
-#define ADC_OFFSET_REAR_LEFT 	-34350
-#define ADC_CAL_TEMP			21
-#define ADC_SCALE 				1
+/* Calibration at 21.15C  */
+#define ADC_OFFSET_FRONT_LEFT 	-166500
+#define ADC_OFFSET_FRONT_RIGHT 	80955
+#define ADC_OFFSET_REAR_LEFT 	-39330
+#define ADC_OFFSET_REAR_RIGHT 	155070
+#define ADC_CAL_TEMP			20.2
+#define ADC_SCALE 				45
 /*
  * 0.05% FS (10C) = 50000 (50kg) x 0.0005 = 25g
  * Weight = sum of 4 load cell ==> 100g / 10C ==> 10 g/C
  * Temp_Effect = 10x ADC_SCALE
  */
 #define	LOADCELL_TEMP_EFFECT	330*4
-#define ADC_NB_SAMPLES			32
-#define ADC_DROPPED_SAMPLES		16
+#define ADC_NB_SAMPLES			16
+#define ADC_DROPPED_SAMPLES		8
 #define ADC_POWER_UP_MS			600
 #define LORA_CORRECT_PACKET		0
 #define ACK_NTP_CODE			0x01
@@ -101,7 +102,8 @@
 
 #define PWR_GPIOA_PULLUP 	(PWR_GPIO_BIT_15|PWR_GPIO_BIT_13|PWR_GPIO_BIT_12|PWR_GPIO_BIT_11|PWR_GPIO_BIT_0)
 #define PWR_GPIOB_PULLUP 	(PWR_GPIO_BIT_15|PWR_GPIO_BIT_14|PWR_GPIO_BIT_13|PWR_GPIO_BIT_12|PWR_GPIO_BIT_11|PWR_GPIO_BIT_2|PWR_GPIO_BIT_1)
-#define PWR_GPIOC_PULLUP 	(PWR_GPIO_BIT_15|PWR_GPIO_BIT_14|PWR_GPIO_BIT_13|PWR_GPIO_BIT_12|PWR_GPIO_BIT_10|PWR_GPIO_BIT_8|PWR_GPIO_BIT_6|PWR_GPIO_BIT_5|PWR_GPIO_BIT_4|PWR_GPIO_BIT_3|PWR_GPIO_BIT_2)
+#define PWR_GPIOC_PULLUP 	(PWR_GPIO_BIT_15|PWR_GPIO_BIT_14|PWR_GPIO_BIT_12|PWR_GPIO_BIT_10|PWR_GPIO_BIT_8|PWR_GPIO_BIT_6|PWR_GPIO_BIT_4|PWR_GPIO_BIT_3|PWR_GPIO_BIT_2)
+#define PWR_GPIOC_PULLDOWN 	(PWR_GPIO_BIT_13|PWR_GPIO_BIT_5)
 #define PWR_GPIOD_PULLUP 	(PWR_GPIO_BIT_2)
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -113,6 +115,13 @@ typedef struct  {
 	uint32_t gwTime;
 	uint32_t gwReportingPeriod;
 } AckData_t;
+typedef struct  {
+	float	FrontLeft;
+	float	FrontRight;
+	float	RearLeft;
+	float	RearRight;
+	float	Total;
+} Weight_t;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CORTEX-M4 REGISTERS DEFINITION
@@ -233,8 +242,8 @@ uint32_t initDHT(void);
 uint32_t initADC(void);
 uint32_t initLoRa(void);
 uint32_t measureTempHum(float* T, float* H);
-uint32_t measureHX711(float* Weight);
-uint32_t adjustWeight(float* Weight, float T);
+uint32_t measureHX711(Weight_t* Weight);
+uint32_t adjustWeight(Weight_t* Weight, float T);
 uint32_t handleAckData(uint8_t *AckMessage, uint8_t *AckSize, AckData_t *gwAckData);
 uint32_t bcd_to_decimal(uint32_t bcd);
 uint32_t decimal_to_bcd(uint32_t d);
@@ -247,4 +256,6 @@ uint32_t addDateTime(tm* endtime, tm starttime, uint32_t duration);
 uint32_t setAlarm(tm alrm);
 void GotoLowPower(uint32_t LowPowerMode);
 void Error_Handler(uint32_t error_code);
+uint32_t measureVbat(uint16_t *VbatADC);
+
 #endif /* HIVETRONIC_H_ */
