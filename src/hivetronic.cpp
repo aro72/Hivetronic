@@ -30,7 +30,7 @@
 #define DEBUG_HIVETRONIC
 #define DEBUG_HX711
 #define STM32_RTC
-#define LORA_ENABLED_N
+#define LORA_ENABLED
 #define WFI
 #define ADC_POWER_OPTIM
 #define FAST_REPORTING
@@ -39,7 +39,6 @@
 // GLOBAL VARIABLES
 
 DHT dht(DHTPIN, DHTTYPE);
-float weight[4] = {0};
 HX711 adcFrontLeft, adcFrontRight, adcRearLeft, adcRearRight;
 int loraMode = LORAMODE;
 uint32_t seq = 0;
@@ -47,7 +46,10 @@ uint32_t inactiveDuration = LORA_REPORTING_PERIOD-PROCESSING_DURATION;
 uint32_t WakeUpFlag=0, PullUpGPIOA;
 ADC_HandleTypeDef hadc1;
 RTC_HandleTypeDef hrtc;
-
+float Temp = NAN;
+float Hum = NAN;
+Weight_t Weight;
+float Vbat=0;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Setup function
@@ -59,6 +61,12 @@ void setup() {
 	delay(10);
 	// Print a start message
 #ifdef DEBUG_HIVETRONIC
+	if (WakeUpFlag==0) {
+		printf("... Wake-up from Shutdown\r\n");
+	} else {
+		printf("PU %ld -  WU %ld\r\n", PullUpGPIOA, WakeUpFlag);
+		printf("... Wake-up from Standby\r\n");
+	}
 	printf("\r\n\r\n\n\r");
 	printf("////////////////////////////////////\r\n");
 	printf("\r\n");
@@ -85,10 +93,6 @@ void loop(void)
 	uint8_t message[100]={0}, AckMessage[100]={0};
 	AckData_t gwAckData;
 	uint8_t AckSize;
-	float Temp = NAN;
-	float Hum = NAN;
-	float Weight = NAN;
-	float Vbat=0;
 	tm time;
 	char cDateTime[26];
 	// FIX THIS - Is it really needed ???
@@ -113,20 +117,24 @@ void loop(void)
 		getRTCDateTime(&time);
 		sprintf(cDateTime, "%02d/%02d/%4d-%02d:%02d:%02d",
 				time.tm_mday,
-				time.tm_mon,
+				time.tm_mon+1,
 				(time.tm_year+1900),
 				time.tm_hour,
 				time.tm_min,
 				time.tm_sec);
     	String strT(Temp, 2);
     	String strH(Hum, 2);
-    	String strW(Weight, 3);
+    	String strWeightFL(Weight.FrontLeft, 3);
+    	String strWeightFR(Weight.FrontRight, 3);
+    	String strWeightRL(Weight.RearLeft, 3);
+    	String strWeightRR(Weight.RearRight, 3);
+    	String strWeightTotal(Weight.Total, 3);
     	String strSeq(seq, 10);
     	String strVbat(Vbat,3);
     	String strTime(cDateTime);
     	String messageData;
 
-      	messageData = strTime + " - Vbat=" + strVbat + " - T=" + strT + " - H=" + strH + " - W=" + strW;
+      	messageData = strTime + " - Vbat=" + strVbat + " - T=" + strT + " - H=" + strH + " - FL=" + strWeightFL + " - FR=" + strWeightFR + " - RL=" + strWeightRL + " - RR=" + strWeightRR + " - W=" + strWeightTotal;
     	r_size = strlen(messageData.c_str());
     	for (uint32_t i = 0; i < r_size; i++) {
 			message[i] = (uint8_t) messageData.c_str()[i];
@@ -139,7 +147,7 @@ void loop(void)
 		seq++;
 	    ret = sx1272.sendPacketTimeoutACK(DEFAULT_DEST_ADDR, message, r_size);
 #ifdef DEBUG_HIVETRONIC
-	    printf("Packet sent, state %d\r\n", ret);
+	    printf("Packet sent - state %d\r\n", ret);
 	    if (ret == 3)
 			printf("No Ack!\r\n");
 		if (ret == 0)
@@ -204,9 +212,11 @@ void GotoLowPower(uint32_t LowPowerMode) {
 			break;
 		case PM_STANDBY:
 			HAL_PWR_EnterSTANDBYMode();
+			for(;;);
 			break;
 		case PM_SHUTDOWN:
 			HAL_PWREx_EnterSHUTDOWNMode();
+			for(;;);
 			break;
 		default:
 			Error_Handler(ERROR_PMMODE);
@@ -292,7 +302,7 @@ uint32_t setAlarm(tm alrm) {
 	// date mask doesn't care
 	RTC_ALARMAR |= 0x80000000;
 	// Configure EXTI line 18 in Rising Edge as RTC Alarm interrupt
-	__HAL_PWR_CLEAR_FLAG(PWR_FLAG_WUF5);
+	__HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
 	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH); /* Wake-up 5 = PC5 */
 	HAL_PWREx_DisableInternalWakeUpLine();
 	//__HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
@@ -340,6 +350,7 @@ uint32_t setRTCDateTime(tm time) {
 	wdu = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_wday));
 	yt = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_year/10));
 	yu = (uint8_t) decimal_to_bcd((uint8_t)(time.tm_year - 10*yt));
+	// printf("set date : %d%d-%d%d-%d%d\r\n", dt, du, mt, mu, yt, yu);
   	if (dt<3) {
   		RTC_TR = ht<<20 | hu<<16 | mnt<<12 | mnu<<8 | st<<4 | su;
   		/* FIX THIS: month not handle correctly */
@@ -400,7 +411,7 @@ uint32_t getRTCDateTime(tm* time) {
 	char charDateTime[100];
 	sprintf(charDateTime, "Get Date/Time - %02d/%02d/%4d-%02d:%02d:%02d",
 			time->tm_mday,
-			time->tm_mon,
+			time->tm_mon+1,
 			(time->tm_year+1900),
 			time->tm_hour,
 			time->tm_min,
@@ -494,22 +505,13 @@ uint32_t handleAckData(uint8_t *AckMessage, uint8_t *AckSize, AckData_t *gwAckDa
 	return ret;
 }
 
-uint32_t measureHX711(float* Weight) {
+uint32_t measureHX711(Weight_t* Weight) {
 	int32_t FrontLeftTab[ADC_NB_SAMPLES];
 	int32_t FrontRightTab[ADC_NB_SAMPLES];
 	int32_t RearLeftTab[ADC_NB_SAMPLES];
 	int32_t RearRightTab[ADC_NB_SAMPLES];
 	uint32_t i, start_idx, stop_idx;
 	float FrontLeft_avg=0, FrontRight_avg=0, RearLeft_avg=0, RearRight_avg=0;
-
-	// Power up all ADC
-	/* No need to power-up as, this is done in initADC  at each wake-up from standby-shutdown
-	adcFrontLeft.power_up();
-	adcFrontRight.power_up();
-	adcRearLeft.power_up();
-	adcRearRight.power_up();
-	delay(ADC_POWER_UP_MS);
-	*/
 
 	// Read ADC for all load cells
 	for (i=0;i<ADC_NB_SAMPLES;i++) {
@@ -580,10 +582,6 @@ uint32_t measureHX711(float* Weight) {
 	// Calculate average by removing first quarter and last quarter of sorted tables
 	start_idx = ADC_DROPPED_SAMPLES/2;
 	stop_idx = ADC_NB_SAMPLES - (ADC_DROPPED_SAMPLES/2);
-#ifdef DEBUG_HX711
-	printf("Start_index: %ld\r\n", start_idx);
-	printf("Stop_index: %ld\r\n", stop_idx);
-#endif /* DEBUG_HX711 */
 	for (i=start_idx;i<stop_idx;i++) {
 			FrontLeft_avg += FrontLeftTab[i];
 			FrontRight_avg += FrontRightTab[i];
@@ -595,19 +593,24 @@ uint32_t measureHX711(float* Weight) {
 	RearLeft_avg /= ADC_NB_SAMPLES-ADC_DROPPED_SAMPLES;
 	RearRight_avg /= ADC_NB_SAMPLES-ADC_DROPPED_SAMPLES;
 #ifdef DEBUG_HX711
-	printf("Average: %.0f\t%.0f\t%.0f\t%.0f\r\n", FrontLeft_avg, FrontRight_avg, RearLeft_avg, RearRight_avg);
+	printf("Average: \t%.0f\t%.0f\t%.0f\t%.0f\r\n", FrontLeft_avg, FrontRight_avg, RearLeft_avg, RearRight_avg);
 #endif /* DEBUG_HX711 */
 
-	// Calculate weight
-	*Weight = FrontLeft_avg + FrontRight_avg + RearLeft_avg + RearRight_avg;
-#ifdef DEBUG_HIVETRONIC
-	printf("Weight: %.0f\r\n", *Weight);
+	// Update Structure
+	Weight->FrontLeft = FrontLeft_avg;
+	Weight->FrontRight = FrontRight_avg;
+	Weight->RearLeft = RearLeft_avg;
+	Weight->RearRight = RearRight_avg;
+	Weight->Total = FrontLeft_avg + FrontRight_avg + RearLeft_avg + RearRight_avg;
+#ifdef DEBUG_HIVETRONIC_N
+	printf("Weight: %.0f\r\n", Weight->Total);
 #endif /* DEBUG_HIVETRONIC */
 
 	return NO_ERROR;
 }
 
-uint32_t adjustWeight(float* Weight, float T) {
+uint32_t adjustWeight(Weight_t* Weight, float T) {
+#if 0
 	uint32_t ret=NO_ERROR;
 	float deltaTemp, deltaWeight;
 	deltaTemp = T-ADC_CAL_TEMP;
@@ -618,6 +621,7 @@ uint32_t adjustWeight(float* Weight, float T) {
 #endif /* DEBUG_HIVETRONIC */
 	*Weight = *Weight - deltaWeight;
 	return ret;
+#endif /* #if 0 */
 }
 
 uint32_t measureTempHum(float* T, float* H) {
@@ -748,7 +752,7 @@ uint32_t initADC(void) {
 	// 		Offset drift:	+/- 6nV/°C
 	//		Gain drift:		+/- 5ppm/°C
 	int32_t adc[4];
-#ifdef DEBUG_HIVETRONIC
+#ifdef DEBUG_HIVETRONIC_N
 	printf("initializing HX711 converters ...\r\n");
 #endif /* DEBUG_HIVETRONIC*/
 	// initialize each HX711
@@ -787,12 +791,12 @@ uint32_t initADC(void) {
 	adcRearLeft.power_down();
 	adcRearRight.power_down();
 	*/
-#ifdef DEBUG_HIVETRONIC
+#ifdef DEBUG_HIVETRONIC_N
 	printf("\tFrontLeft:\t%ld\r\n",adc[0]);
 	printf("\tFrontRight:\t%ld\r\n",adc[1]);
 	printf("\tRearLeft:\t%ld\r\n",adc[2]);
 	printf("\tRearRight:\t%ld\r\n",adc[3]);
-	printf("... init done");
+	printf("... init done\r\n");
 #endif /* DEBUG_HIVETRONIC*/
 	return NO_ERROR;
 }
@@ -807,7 +811,7 @@ uint32_t initLoRa(void) {
 	sx1272.ON();
 	// Set transmission mode and print the result
 	ret = sx1272.setMode(loraMode);
-#ifdef DEBUG_HIVETRONIC
+#ifdef DEBUG_HIVETRONIC_N
 	printf("Lora mode: %d\r\n", loraMode);
 	printf("Setting Mode: state %d\r\n", ret);
 #endif /* DEBUG_HIVETRONIC*/
@@ -815,7 +819,7 @@ uint32_t initLoRa(void) {
 	sx1272._enableCarrierSense = true;
 	// Select frequency channel
 	ret = sx1272.setChannel(CH_10_868);
-#ifdef DEBUG_HIVETRONIC
+#ifdef DEBUG_HIVETRONIC_N
 	printf("Setting Channel: state %d\r\n", ret);
 #endif /* DEBUG_HIVETRONIC*/
 	// Select output power (Max, High or Low)
@@ -826,7 +830,7 @@ uint32_t initLoRa(void) {
 	// Set the node address and print the result
 	ret = sx1272.setNodeAddress(LORA_NODE_ADDR);
 #ifdef DEBUG_HIVETRONIC
-	printf("Setting node addr: state %d\r\n", ret);
+	//printf("Setting node addr: state %d\r\n", ret);
 	printf("SX1272/76 successfully configured\r\n");
 #endif /* DEBUG_HIVETRONIC*/
 	return NO_ERROR;
@@ -854,7 +858,7 @@ void WakeUp() {
 	if(__HAL_RTC_ALARM_GET_FLAG(&hrtc, RTC_FLAG_ALRAF) != RESET) {
 	  /* AlarmA callback */
 #ifdef DEBUG_HIVETRONIC
-	  printf("AlarmA IT flag at wake-up");
+	  printf("AlarmA IT flag at wake-up\r\n");
 #endif /* DEBUG_HIVETRONIC*/
 	  /* Clear the AlarmA interrupt pending bit */
 	  __HAL_RTC_ALARM_CLEAR_FLAG(&hrtc, RTC_FLAG_ALRAF);
@@ -862,11 +866,11 @@ void WakeUp() {
 	__HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
 	PullUpGPIOA = LL_PWR_ReadReg(PUCRA);
 #ifdef DEBUG_HIVETRONIC
-	if ((PullUpGPIOA!=PWR_GPIOA_PULLUP) && (WakeUpFlag==2)) {
-		printf("... Wake-up from Shutdown");
+	if (WakeUpFlag==0) {
+		printf("... Wake-up from Shutdown\r\n");
 	} else {
-		printf("%ld - %ld", PullUpGPIOA, WakeUpFlag);
-		printf("... Wake-up from Standby");
+		printf("PU %ld -  WU %ld", PullUpGPIOA, WakeUpFlag);
+		printf("... Wake-up from Standby\r\n");
 	}
 #endif /* DEBUG_HIVETRONIC*/
 }
@@ -875,7 +879,9 @@ void initGPIO(void) {
 	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_A, PWR_GPIOA_PULLUP);
 	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_B, PWR_GPIOB_PULLUP);
 	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_C, PWR_GPIOC_PULLUP);
+	HAL_PWREx_EnableGPIOPullDown(PWR_GPIO_C, PWR_GPIOC_PULLDOWN);
 	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_D, PWR_GPIOD_PULLUP);
+	LL_PWR_EnablePUPDCfg();
 }
 
 /* ADC1 init function */
