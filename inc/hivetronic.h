@@ -100,13 +100,13 @@
 #define ACK_NTP_CODE			0x01
 #define ACK_PERIOD_CODE			0x02
 
-#define WAKEUP_ALIGN			1
+#define WAKEUP_ALIGN			1 /* in minute */
 #ifdef FAST_REPORTING
-#define DAY_REPORTING			20  /* in seconds */
-#define NIGHT_REPORTING			120 /* in seconds */
+#define DAYTIME_REPORTING		20  /* in seconds */
+#define NIGHTTIME_REPORTING		30 /* in seconds */
 #else
-#define DAY_REPORTING			600  /* in seconds */
-#define NIGHT_REPORTING			1800 /* in seconds */
+#define DAYTIME_REPORTING		600  /* in seconds */
+#define NIGHTTIME_REPORTING		1800 /* in seconds */
 #endif /* FAST_REPORTING */
 
 #define PWR_GPIOA_PULLUP 	(PWR_GPIO_BIT_15|PWR_GPIO_BIT_13|PWR_GPIO_BIT_12|PWR_GPIO_BIT_11|PWR_GPIO_BIT_0)
@@ -131,6 +131,16 @@ typedef struct  {
 	float	RearRight;
 	float	Total;
 } Weight_t;
+
+typedef struct  {
+	int32_t hour;
+	int32_t min;
+} HourMin_t;
+
+typedef struct  {
+	HourMin_t sunrise;
+	HourMin_t sunset;
+} daylight_t;
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // CORTEX-M4 REGISTERS DEFINITION
@@ -266,5 +276,9 @@ uint32_t setAlarm(tm alrm);
 void GotoLowPower(uint32_t LowPowerMode);
 void Error_Handler(uint32_t error_code);
 uint32_t measureVbat(uint16_t *VbatADC);
+uint32_t getNextAlarm(tm* alarm, tm time);
+void MX_ADC1_Init(void);
+void initGPIO(void);
+void WakeUp(void);
 
 #endif /* HIVETRONIC_H_ */

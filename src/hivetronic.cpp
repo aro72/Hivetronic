@@ -29,10 +29,7 @@
 // GLOBAL CONFIGURATIONS
 #define DEBUG_HIVETRONIC
 #define DEBUG_HX711
-#define STM32_RTC
 #define LORA_ENABLED
-#define WFI
-#define ADC_POWER_OPTIM
 #define FAST_REPORTING
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -64,7 +61,6 @@ void setup() {
 	if (WakeUpFlag==0) {
 		printf("... Wake-up from Shutdown\r\n");
 	} else {
-		printf("PU %ld -  WU %ld\r\n", PullUpGPIOA, WakeUpFlag);
 		printf("... Wake-up from Standby\r\n");
 	}
 	printf("\r\n\r\n\n\r");
@@ -73,12 +69,15 @@ void setup() {
 	printf("Hive monitor using HX711 and LoRa\r\n");
 	printf("ARM (STM32)\r\n");
 #endif /* DEBUG_HIVETRONIC */
-	initADC();
+	WakeUp();
+  	initGPIO();
 	initRTC();
 	initDHT();
+  	MX_ADC1_Init();
 #ifdef LORA_ENABLED
 	initLoRa();
 #endif
+	initADC();
 
 }
 
@@ -95,47 +94,43 @@ void loop(void)
 	uint8_t AckSize;
 	tm time;
 	char cDateTime[26];
-	// FIX THIS - Is it really needed ???
-	// sx1272.CarrierSense();
-	// END OF FIX THIS
-	sx1272.setPacketType(PKT_TYPE_DATA);
-	while (1) {
-#ifdef DEBUG_HIVETRONIC
-		printf("\r\n");
-		printf("-------------\r\n");
-#endif /* DEBUG_HIVETRONIC */
-		// measure temperature
-		measureTempHum(&Temp, &Hum);
-		measureHX711(&Weight);
-		measureVbat(&VbatADC);
-		Vbat = 3*3.3*VbatADC/4095; /* Vbat/3, 12-bit resolution, Vref+=3.3V */
-		/*
-		* remove temp adjustment as long as calibration and 
-		* recording of a fixed weight at different temperature is not available
-		*/
-		// adjustWeight(&Weight, Temp);
-		getRTCDateTime(&time);
-		sprintf(cDateTime, "%02d/%02d/%4d-%02d:%02d:%02d",
-				time.tm_mday,
-				time.tm_mon+1,
-				(time.tm_year+1900),
-				time.tm_hour,
-				time.tm_min,
-				time.tm_sec);
-    	String strT(Temp, 2);
-    	String strH(Hum, 2);
-    	String strWeightFL(Weight.FrontLeft, 3);
-    	String strWeightFR(Weight.FrontRight, 3);
-    	String strWeightRL(Weight.RearLeft, 3);
-    	String strWeightRR(Weight.RearRight, 3);
-    	String strWeightTotal(Weight.Total, 3);
-    	String strSeq(seq, 10);
-    	String strVbat(Vbat,3);
-    	String strTime(cDateTime);
-    	String messageData;
 
-      	messageData = strTime + " - Vbat=" + strVbat + " - T=" + strT + " - H=" + strH + " - FL=" + strWeightFL + " - FR=" + strWeightFR + " - RL=" + strWeightRL + " - RR=" + strWeightRR + " - W=" + strWeightTotal;
-    	r_size = strlen(messageData.c_str());
+	/* measure weight, temperature/humidity, Vbat */
+	measureHX711(&Weight);
+	measureTempHum(&Temp, &Hum);
+	measureVbat(&VbatADC); /* VbatADC = Vbat/3 */
+	Vbat = 3*3.3*VbatADC/4095; /* 12-bit resolution, Vref+=3.3V */
+
+#ifdef DEBUG_HIVETRONIC
+	printf("\r\n");
+	printf("-------------\r\n");
+#endif /* DEBUG_HIVETRONIC */
+	/*
+	* remove temp adjustment as long as calibration and 
+	* recording of a fixed weight at different temperature is not available
+	*/
+	// adjustWeight(&Weight, Temp);
+	getRTCDateTime(&time);
+	sprintf(cDateTime, "%02d/%02d/%4d-%02d:%02d:%02d",
+			time.tm_mday,
+			time.tm_mon+1,
+			(time.tm_year+1900),
+			time.tm_hour,
+			time.tm_min,
+			time.tm_sec);
+   	String strTime(cDateTime);
+   	String strVbat(Vbat,3);
+   	String strT(Temp, 2);
+   	String strH(Hum, 2);
+   	String strWeightFL(Weight.FrontLeft, 3);
+   	String strWeightFR(Weight.FrontRight, 3);
+   	String strWeightRL(Weight.RearLeft, 3);
+   	String strWeightRR(Weight.RearRight, 3);
+   	String strWeightTotal(Weight.Total, 3);
+   	// String strSeq(seq, 10);
+   	String messageData;
+    messageData = strTime + " - Vbat=" + strVbat + " - T=" + strT + " - H=" + strH + " - FL=" + strWeightFL + " - FR=" + strWeightFR + " - RL=" + strWeightRL + " - RR=" + strWeightRR + " - W=" + strWeightTotal;
+   	r_size = strlen(messageData.c_str());
     	for (uint32_t i = 0; i < r_size; i++) {
 			message[i] = (uint8_t) messageData.c_str()[i];
 		}
@@ -144,22 +139,23 @@ void loop(void)
 #ifdef DEBUG_HIVETRONIC
     	printf("\nSending Message (length=%d) : %s\r\n", (int)r_size,message);
 #endif /* DEBUG_HIVETRONIC*/
-		seq++;
-	    ret = sx1272.sendPacketTimeoutACK(DEFAULT_DEST_ADDR, message, r_size);
+	// FIX THIS - Is it really needed ???
+	// sx1272.CarrierSense();
+	// END OF FIX THIS
+	sx1272.setPacketType(PKT_TYPE_DATA);
+    ret = sx1272.sendPacketTimeoutACK(DEFAULT_DEST_ADDR, message, r_size);
 #ifdef DEBUG_HIVETRONIC
-	    printf("Packet sent - state %d\r\n", ret);
-	    if (ret == 3)
-			printf("No Ack!\r\n");
-		if (ret == 0)
-			printf("Ack received from gateway!\r\n");
+    printf("Packet sent - state %d\r\n", ret);
+    if (ret == 3)
+		printf("No Ack!\r\n");
+	if (ret == 0)
+		printf("Ack received from gateway!\r\n");
 #endif /* DEBUG_HIVETRONIC*/
-		if (ret==0) {
-			sx1272.getAckPacket(DEFAULT_DEST_ADDR, AckMessage, &AckSize);
-			handleAckData(AckMessage, &AckSize, &gwAckData);
-		}
-		//delay(inactiveDuration);
-		enterLowPower(LOW_POWER_MODE, inactiveDuration);
+	if (ret==0) {
+		sx1272.getAckPacket(DEFAULT_DEST_ADDR, AckMessage, &AckSize);
+		handleAckData(AckMessage, &AckSize, &gwAckData);
 	}
+	enterLowPower(LOW_POWER_MODE, inactiveDuration);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -234,7 +230,8 @@ void GotoLowPower(uint32_t LowPowerMode) {
 uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
 	tm time, alarm;
 	getRTCDateTime(&time);
-	addDateTime(&alarm, time, duration);
+	getNextAlarm(&alarm, time);
+	//addDateTime(&alarm, time, duration);
 #ifdef DEBUG_HIVETRONIC
 	printf("Alarm set: %02d:%02d:%02d\r\n", alarm.tm_hour, alarm.tm_min, alarm.tm_sec);
 	printf("Low Power entry ...\r\n");
@@ -246,6 +243,110 @@ uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
 	printf("... Low Power exit\r\n");
 #endif /* DEBUG_HIVETRONIC */
 	return NO_ERROR;
+}
+
+uint32_t getNextAlarm(tm* alarm, tm time) {
+	daylight_t daylight;
+	tm previous_alarm;
+	uint32_t reporting_period;
+	/* Get sunrise/sunset depending on month */
+	switch (time.tm_mon) {
+		case 0: /* january */
+			daylight.sunrise.hour 	=	8;
+			daylight.sunrise.min 	=	30;
+			daylight.sunset.hour 	=	18;
+			daylight.sunset.min 	= 	00;
+			break;
+		case 1: /* february */
+			daylight.sunrise.hour 	=	7;
+			daylight.sunrise.min 	=	40;
+			daylight.sunset.hour 	= 	18;
+			daylight.sunset.min 	= 	40;
+			break;
+		case 2: /* march */
+			daylight.sunrise.hour 	=	7;
+			daylight.sunrise.min 	= 	00;
+			daylight.sunset.hour 	= 	20;
+			daylight.sunset.min 	= 	30;
+			break;
+		case 3: /* april */
+			daylight.sunrise.hour 	=	6;
+			daylight.sunrise.min 	= 	40;
+			daylight.sunset.hour 	= 	21;
+			daylight.sunset.min 	= 	10;
+			break;
+		case 4: /* may */
+			daylight.sunrise.hour 	= 	6;
+			daylight.sunrise.min 	= 	00;
+			daylight.sunset.hour 	= 	21;
+			daylight.sunset.min 	= 	50;
+			break;
+		case 5: /* june */
+			daylight.sunrise.hour 	= 	6;
+			daylight.sunrise.min 	= 	00;
+			daylight.sunset.hour 	= 	22;
+			daylight.sunset.min 	= 	00;
+			break;
+		case 6: /* july */
+			daylight.sunrise.hour 	= 	6;
+			daylight.sunrise.min 	= 	00;
+			daylight.sunset.hour 	= 	22;
+			daylight.sunset.min 	= 	00;
+			break;
+		case 7: /* august */
+			daylight.sunrise.hour 	= 	6;
+			daylight.sunrise.min 	= 	30;
+			daylight.sunset.hour 	= 	21;
+			daylight.sunset.min 	= 	30;
+			break;
+		case 8: /* september */
+			daylight.sunrise.hour 	= 	7;
+			daylight.sunrise.min 	= 	20;
+			daylight.sunset.hour 	= 	20;
+			daylight.sunset.min 	= 	40;
+			break;
+		case 9: /* october */
+			daylight.sunrise.hour 	= 	7;
+			daylight.sunrise.min 	= 	40;
+			daylight.sunset.hour 	= 	19;
+			daylight.sunset.min 	= 	40;
+			break;
+		case 10: /* november */
+			daylight.sunrise.hour 	= 	7;
+			daylight.sunrise.min 	= 	40;
+			daylight.sunset.hour 	= 	17;
+			daylight.sunset.min 	= 	40;
+			break;
+		case 11: /* december */
+			daylight.sunrise.hour 	= 	8;
+			daylight.sunrise.min 	= 	30;
+			daylight.sunset.hour 	= 	17;
+			daylight.sunset.min 	= 	00;
+			break;
+		default:
+			Error_Handler(ERROR_BAD_DATE);
+	}
+
+	/* Select reporting period depending on time and sunrise/sunset */
+	reporting_period = NIGHTTIME_REPORTING;
+	if ((time.tm_hour>daylight.sunrise.hour) and (time.tm_min>daylight.sunrise.min)) {
+		/* sunrise already happened */
+		if ((time.tm_hour<daylight.sunset.hour) and (time.tm_min<daylight.sunset.min)) {
+			/* not yet sunset: stil day time */
+			reporting_period = DAYTIME_REPORTING;
+		}
+	} 
+
+	/* calculate next alarm */
+#ifndef FAST_REPORTING
+	memcpy(&previous_alarm, &time, sizeof(tm));
+	previous_alarm.tm_sec = 0;
+	addDateTime(alarm, previous_alarm, reporting_period);
+	alarm->tm_min = alarm->tm_min | WAKEUP_ALIGN;
+#else /* FAST_REPORTING*/
+	addDateTime(alarm, time, reporting_period);
+#endif /* FAST_REPORTING */
+	return NO_ERROR; 
 }
 
 uint32_t addDateTime(tm* endtime, tm starttime, uint32_t duration) {
@@ -272,7 +373,7 @@ uint32_t addDateTime(tm* endtime, tm starttime, uint32_t duration) {
 	if (endtime->tm_hour>23) {
 		// add one minute
 		endtime->tm_hour = endtime->tm_hour-24;
-		carry=1;
+		// carry=1;
 	}
 	return NO_ERROR;
 }
@@ -304,7 +405,7 @@ uint32_t setAlarm(tm alrm) {
 	// Configure EXTI line 18 in Rising Edge as RTC Alarm interrupt
 	__HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
 	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH); /* Wake-up 5 = PC5 */
-	HAL_PWREx_DisableInternalWakeUpLine();
+	//HAL_PWREx_DisableInternalWakeUpLine();
 	//__HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
 	//__HAL_RTC_ALARM_EXTI_ENABLE_RISING_EDGE();
 	//__HAL_RTC_ALARM_EXTI_ENABLE_IT();
@@ -369,7 +470,7 @@ uint32_t setRTCDateTime(tm time) {
 	RTC_WPR = 0xAD;
 	delay(50);
 	return NO_ERROR;
-#else /* 0 */
+#else /* !RTC_HAL */
 	RTC_TimeTypeDef sTime;
 	RTC_DateTypeDef sDate;
 	sTime.Seconds = time.tm_sec;
@@ -384,7 +485,12 @@ uint32_t setRTCDateTime(tm time) {
 	if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BIN) != HAL_OK) {
 	  Error_Handler(ERROR_SETDATE);
 	}
-#endif
+#endif /* !RTC_HAL */
+#ifdef DEBUG_HIVETRONIC
+		printf("Set Time/Date\r\n");
+		printf("RTC_TR: %ld\r\n", RTC_TR);
+		printf("RTC_DR: %ld\r\n", RTC_DR);
+#endif /* DEBUG_HIVETRONIC*/
 	return NO_ERROR;
 }
 
@@ -492,12 +598,6 @@ uint32_t handleAckData(uint8_t *AckMessage, uint8_t *AckSize, AckData_t *gwAckDa
     				i+=7;
     				setRTCDateTime(time);
     			}
-    			if ((opcode&ACK_PERIOD_CODE)==ACK_PERIOD_CODE) {
-	    			// need to update date and time
-    				gwAckData->gwReportingPeriod = (uint32_t) ((AckMessage[i]<<24)+(AckMessage[i+1]<<16)+(AckMessage[i+2]<<8)+(AckMessage[i+3])) ;
-    				inactiveDuration = gwAckData->gwReportingPeriod - PROCESSING_DURATION;
-    				i=+4;
-    			}
 			} while (i<*AckSize);
     	}
     	ret=NO_ERROR;
@@ -516,20 +616,33 @@ uint32_t measureHX711(Weight_t* Weight) {
 	// Read ADC for all load cells
 	for (i=0;i<ADC_NB_SAMPLES;i++) {
 		FrontLeftTab[i]  = (int32_t)  adcFrontLeft.get_units();
+		if (i==(ADC_NB_SAMPLES-1)) {
+			adcFrontLeft.power_down();
+		}
 		FrontRightTab[i] = (int32_t) adcFrontRight.get_units();
+		if (i==(ADC_NB_SAMPLES-1)) {
+			adcFrontRight.power_down();
+		}
 		RearLeftTab[i]   = (int32_t) adcRearLeft.get_units();
+		if (i!=(ADC_NB_SAMPLES-1)) {
+			adcRearLeft.power_down();
+		}
 		RearRightTab[i]  = (int32_t) adcRearRight.get_units();
 		if (i!=(ADC_NB_SAMPLES-1)) {
 			delay(100);
+		} else {
+			adcRearRight.power_down();
 		}
 
 	}
 
 	// Power down all ADC to decrease power consumption
+	/*
 	adcFrontLeft.power_down();
 	adcFrontRight.power_down();
 	adcRearLeft.power_down();
 	adcRearRight.power_down();
+	*/
 
 #ifdef DEBUG_HX711
 	// Display unsorted tables
@@ -610,8 +723,8 @@ uint32_t measureHX711(Weight_t* Weight) {
 }
 
 uint32_t adjustWeight(Weight_t* Weight, float T) {
-#if 0
 	uint32_t ret=NO_ERROR;
+#if 0
 	float deltaTemp, deltaWeight;
 	deltaTemp = T-ADC_CAL_TEMP;
 	deltaWeight = LOADCELL_TEMP_EFFECT*deltaTemp;
@@ -620,8 +733,8 @@ uint32_t adjustWeight(Weight_t* Weight, float T) {
 	printf("Weight after adjustment: %.0f\r\n", *Weight-deltaWeight);
 #endif /* DEBUG_HIVETRONIC */
 	*Weight = *Weight - deltaWeight;
-	return ret;
 #endif /* #if 0 */
+	return ret;
 }
 
 uint32_t measureTempHum(float* T, float* H) {
@@ -657,87 +770,90 @@ uint32_t initDHT(void) {
 
 uint32_t initRTC(void) {
 #ifdef RTC_HAL
-	RTC_TimeTypeDef sTime;
-	RTC_DateTypeDef sDate;
+	/* if RTC is not enabled, then enable/initialize RTC */
+	if ((RCC_BDCR&0x00008000)==0) {
+		RTC_TimeTypeDef sTime;
+		RTC_DateTypeDef sDate;
 
+		/**Initialize RTC Only
+	  	*/
+		hrtc.Instance = RTC;
+		hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
+		/* Prescaler values are set to get 1Hz clock from LSE (32.768KHz) */
+		hrtc.Init.AsynchPrediv = 127;
+		hrtc.Init.SynchPrediv = 255;
+		hrtc.Init.OutPut = RTC_OUTPUT_ALARMA;
+		hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
+		hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
+		hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
+		if (HAL_RTC_Init(&hrtc) != HAL_OK)
+		{
+	  	Error_Handler(ERROR_INITRTC);
+		}
 
-	/**Initialize RTC Only
-	  */
-	hrtc.Instance = RTC;
-	hrtc.Init.HourFormat = RTC_HOURFORMAT_24;
-	/* Prescaler values are set to get 1Hz clock from LSE (32.768KHz) */
-	hrtc.Init.AsynchPrediv = 127;
-	hrtc.Init.SynchPrediv = 255;
-	hrtc.Init.OutPut = RTC_OUTPUT_ALARMA;
-	hrtc.Init.OutPutRemap = RTC_OUTPUT_REMAP_NONE;
-	hrtc.Init.OutPutPolarity = RTC_OUTPUT_POLARITY_HIGH;
-	hrtc.Init.OutPutType = RTC_OUTPUT_TYPE_OPENDRAIN;
-	if (HAL_RTC_Init(&hrtc) != HAL_OK)
-	{
-	  Error_Handler(ERROR_INITRTC);
-	}
+		// set SYSCFGEN
+		(*(volatile uint32_t *) (RCC_BASE+0x4C)) |= 0x01;
+		// set PWREN
+		(*(volatile uint32_t *) (RCC_BASE+0x58)) |= 0x10000000;
+		delay(100);
+		// set DBP in PWR_CR1
+		(*(volatile uint32_t *) PWR_BASE) |= 0x0100;
+	    // set RTCSEL=LSE and set LSEON in RCC_BDCR
+		(*(volatile uint32_t *) (RCC_BASE+0x90)) |= 0x000000101;
+	    // set RTCEN in RCC_BDCR
+		(*(volatile uint32_t *) (RCC_BASE+0x90)) |= 0x00008000;
 
-	// set SYSCFGEN
-	(*(volatile uint32_t *) (RCC_BASE+0x4C)) |= 0x01;
-	// set PWREN
-	(*(volatile uint32_t *) (RCC_BASE+0x58)) |= 0x10000000;
-	delay(100);
-	// set DBP in PWR_CR1
-	(*(volatile uint32_t *) PWR_BASE) |= 0x0100;
-    // set RTCSEL=LSE and set LSEON in RCC_BDCR
-	(*(volatile uint32_t *) (RCC_BASE+0x90)) |= 0x000000101;
-    // set RTCEN in RCC_BDCR
-	(*(volatile uint32_t *) (RCC_BASE+0x90)) |= 0x00008000;
+		/* default date : May 16, 2016 - 12:00:00 */
+		sTime.Hours = 0x12;
+		sTime.Minutes = 0x0;
+		sTime.Seconds = 0x0;
+		sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
+		sTime.StoreOperation = RTC_STOREOPERATION_RESET;
+		if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
+		{
+	  	Error_Handler(ERROR_SETTIME);
+		}
+		sDate.WeekDay = RTC_WEEKDAY_SATURDAY;
+		sDate.Month = RTC_MONTH_MAY;
+		sDate.Date = 0x16;
+		sDate.Year = 0x16;
 
-	/* default date : May 16, 2016 - 12:00:00 */
-	sTime.Hours = 0x12;
-	sTime.Minutes = 0x0;
-	sTime.Seconds = 0x0;
-	sTime.DayLightSaving = RTC_DAYLIGHTSAVING_NONE;
-	sTime.StoreOperation = RTC_STOREOPERATION_RESET;
-	if (HAL_RTC_SetTime(&hrtc, &sTime, RTC_FORMAT_BCD) != HAL_OK)
-	{
-	  Error_Handler(ERROR_SETTIME);
-	}
-	sDate.WeekDay = RTC_WEEKDAY_SATURDAY;
-	sDate.Month = RTC_MONTH_MAY;
-	sDate.Date = 0x16;
-	sDate.Year = 0x16;
-
-	if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
-	{
-	  Error_Handler(ERROR_SETDATE);
+		if (HAL_RTC_SetDate(&hrtc, &sDate, RTC_FORMAT_BCD) != HAL_OK)
+		{
+	  	Error_Handler(ERROR_SETDATE);
+		}
 	}
 #else /* RTC_HAL */
-	uint32_t value;
-	tm time;    time.tm_sec=0;
-    time.tm_min=0;
-    time.tm_hour=12;
-    time.tm_mday=16;
-    time.tm_mon=5;
-    time.tm_year=16;
-    time.tm_wday=6;
-    hrtc.Instance = RTC;
-      // set SYSCFGEN
-    RCC_APB2ENR |= 0x01;
-    // set PWREN
-    RCC_APB1ENR1 |= 0x10000000;
-    delay(100);
-    // set DBP
-    PWR_CR1 |= 0x0100;
-    // set RTCSEL=LSE and set LSEON
-    RCC_BDCR |= 0x000000101;
-    // set RTCEN
-    RCC_BDCR |= 0x00008000;
-    // update date and time in RTC
-	if (RTC_DR==0x00002101) {
-		setRTCDateTime(time);
+	/* if RTC is not enabled, then enable/initialize RTC */
+	if ((RCC_BDCR&0x00008000)==0) {
+		uint32_t value;
+		tm time;    time.tm_sec=0;
+    	time.tm_min=0;
+    	time.tm_hour=12;
+    	time.tm_mday=16;
+    	time.tm_mon=5;
+    	time.tm_year=16;
+    	time.tm_wday=6;
+    	hrtc.Instance = RTC;
+      	// set SYSCFGEN
+    	RCC_APB2ENR |= 0x01;
+    	// set PWREN
+    	RCC_APB1ENR1 |= 0x10000000;
+    	delay(100);
+    	// set DBP
+    	PWR_CR1 |= 0x0100;
+    	// set RTCSEL=LSE and set LSEON
+    	RCC_BDCR |= 0x000000101;
+    	// set RTCEN
+    	RCC_BDCR |= 0x00008000;
+    	// update date and time in RTC if DR contains the reset value
+		if (RTC_DR==0x00002101) {
+			setRTCDateTime(time);
+		}
 	}
 
 #endif /* RTC_HAL */
-    /* Peripheral interrupt init */
-    HAL_NVIC_SetPriority(RTC_Alarm_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(RTC_Alarm_IRQn);
+
 	return NO_ERROR;
 }
 

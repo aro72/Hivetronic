@@ -27,5 +27,6 @@
 #define ERROR_ADC_START		13
 #define ERROR_ADC_CONV		14
 #define ERROR_ADC_INIT		15
+#define ERROR_BAD_DATE		16
 
 #endif /* ERROR_H_ */
