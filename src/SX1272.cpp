@@ -5705,7 +5705,8 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
         // added by C. Pham
         Serial.println(F("wait for ACK"));
 
-        if( availableData() )
+        // Added by ARO: time out of 2.1s instead of default MAX_TIMEOUT (8s)
+        if( availableData(2100) )
         {
             state_f = getACK();	// Getting ACK
         }
@@ -5905,7 +5906,7 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
  uint8_t SX1272::getACK()
  {
     // FIX THIS ARO: return getACK(MAX_TIMEOUT);
-    return getACK(3000);
+    return getACK(2100);
 }
 
 /*
