@@ -143,7 +143,9 @@ boolean DHT::read(bool force) {
   // First set data line low for 20 milliseconds.
   pinMode(_pin, OUTPUT);
   digitalWrite(_pin, LOW);
-  delay(20);
+  // delay(20);
+  // delay adapted according to datasheet: 1-10ms
+  delay(10);
 
   uint32_t cycles[80];
   {

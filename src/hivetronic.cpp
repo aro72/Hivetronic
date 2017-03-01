@@ -73,8 +73,8 @@ void setup() {
   	initGPIO();
 	initRTC();
 	initDHT();
-	initADC();
   	MX_ADC1_Init();
+	initADC();
 
 }
 
@@ -93,10 +93,10 @@ void loop(void)
 	char cDateTime[26];
 
 	/* measure weight, temperature/humidity, Vbat */
+	measureTempHum(&Temp, &Hum); /* must be done at least 1s after power-up */
 	measureVbat(&VbatADC); /* VbatADC = Vbat/3 */
-	measureTempHum(&Temp, &Hum);
-	measureHX711(&Weight);
 	Vbat = 3*3.3*VbatADC/4095; /* 12-bit resolution, Vref+=3.3V */
+	measureHX711(&Weight);
 
 #ifdef DEBUG_HIVETRONIC
 	printf("\r\n");
