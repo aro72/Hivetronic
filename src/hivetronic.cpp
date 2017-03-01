@@ -74,9 +74,6 @@ void setup() {
 	initRTC();
 	initDHT();
   	MX_ADC1_Init();
-#ifdef LORA_ENABLED
-	initLoRa();
-#endif
 	initADC();
 
 }
@@ -139,11 +136,16 @@ void loop(void)
 #ifdef DEBUG_HIVETRONIC
     	printf("\nSending Message (length=%d) : %s\r\n", (int)r_size,message);
 #endif /* DEBUG_HIVETRONIC*/
+#ifdef LORA_ENABLED
+	initLoRa();
 	// FIX THIS - Is it really needed ???
 	// sx1272.CarrierSense();
 	// END OF FIX THIS
 	sx1272.setPacketType(PKT_TYPE_DATA);
     ret = sx1272.sendPacketTimeoutACK(DEFAULT_DEST_ADDR, message, r_size);
+    // Power OFF the module
+	sx1272.OFF();
+#endif
 #ifdef DEBUG_HIVETRONIC
     printf("Packet sent - state %d\r\n", ret);
     if (ret == 3)

@@ -5920,7 +5920,7 @@ int8_t SX1272::getAckPacket(uint8_t src, uint8_t *payload, uint8_t *size) {
     //Serial.println(F("ACK:"));
     if (src==ACK.src) {
         for (uint32_t i=0;i<ACK.length;i++) {
-            Serial.print(" ");
+            //Serial.print(" ");
             payload[i] = ACK.data[i];
             //Serial.print(payload[i]);
         }
