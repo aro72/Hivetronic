@@ -22,6 +22,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // INCLUDES
+#define FAST_REPORTING
 #include "hivetronic.h"
 
 
@@ -30,7 +31,6 @@
 #define DEBUG_HIVETRONIC
 #define DEBUG_HX711
 #define LORA_ENABLED
-#define FAST_REPORTING
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // GLOBAL VARIABLES
@@ -332,13 +332,10 @@ uint32_t getNextAlarm(tm* alarm, tm time) {
 
 	/* Select reporting period depending on time and sunrise/sunset */
 	reporting_period = NIGHTTIME_REPORTING;
-	if ((time.tm_hour>daylight.sunrise.hour) and (time.tm_min>daylight.sunrise.min)) {
-		/* sunrise already happened */
-		if ((time.tm_hour<daylight.sunset.hour) and (time.tm_min<daylight.sunset.min)) {
-			/* not yet sunset: stil day time */
+	if (((float)(time.tm_hour+time.tm_min/60)>(float)(daylight.sunrise.hour+daylight.sunrise.min/60)) and 
+		((float)(time.tm_hour+time.tm_min/60)<(float)(daylight.sunset.hour+daylight.sunset.min/60))) {
 			reporting_period = DAYTIME_REPORTING;
-		}
-	} 
+	}
 
 	/* calculate next alarm */
 #ifndef FAST_REPORTING
@@ -516,7 +513,7 @@ uint32_t getRTCDateTime(tm* time) {
 	time->tm_wday = 1;
 	time->tm_yday = 1;
 	time->tm_isdst = 0;
-#ifdef DEBUG
+#ifdef DEBUG-hivetronic
 	char charDateTime[100];
 	sprintf(charDateTime, "Get Date/Time - %02d/%02d/%4d-%02d:%02d:%02d",
 			time->tm_mday,
@@ -827,34 +824,31 @@ uint32_t initRTC(void) {
 		}
 	}
 #else /* RTC_HAL */
-	/* if RTC is not enabled, then enable/initialize RTC */
-	if ((RCC_BDCR&0x00008000)==0) {
-		uint32_t value;
-		tm time;    time.tm_sec=0;
+
+    hrtc.Instance = RTC;
+     	// set SYSCFGEN
+    RCC_APB2ENR |= 0x01;
+    // set PWREN
+    RCC_APB1ENR1 |= 0x10000000;
+    delay(100);
+    // set DBP
+    PWR_CR1 |= 0x0100;
+    // set RTCSEL=LSE and set LSEON
+    RCC_BDCR |= 0x000000101;
+    // set RTCEN
+    RCC_BDCR |= 0x00008000;
+    // update date and time in RTC if DR contains the reset value
+	if (RTC_DR==0x00002101) {
+		tm time;
+		time.tm_sec=0;
     	time.tm_min=0;
     	time.tm_hour=12;
     	time.tm_mday=16;
     	time.tm_mon=5;
     	time.tm_year=16;
     	time.tm_wday=6;
-    	hrtc.Instance = RTC;
-      	// set SYSCFGEN
-    	RCC_APB2ENR |= 0x01;
-    	// set PWREN
-    	RCC_APB1ENR1 |= 0x10000000;
-    	delay(100);
-    	// set DBP
-    	PWR_CR1 |= 0x0100;
-    	// set RTCSEL=LSE and set LSEON
-    	RCC_BDCR |= 0x000000101;
-    	// set RTCEN
-    	RCC_BDCR |= 0x00008000;
-    	// update date and time in RTC if DR contains the reset value
-		if (RTC_DR==0x00002101) {
-			setRTCDateTime(time);
-		}
-	}
-
+		setRTCDateTime(time);
+   	}
 #endif /* RTC_HAL */
 
 	return NO_ERROR;
