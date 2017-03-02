@@ -93,12 +93,12 @@
  * Temp_Effect = 10x ADC_SCALE
  */
 #define	LOADCELL_TEMP_EFFECT	330*4
-#define ADC_NB_SAMPLES			16
-#define ADC_DROPPED_SAMPLES		8
+#define ADC_NB_SAMPLES			4
+#define ADC_DROPPED_SAMPLES		0
 #define ADC_POWER_UP_MS			600
 #define LORA_CORRECT_PACKET		0
 #define ACK_NTP_CODE			0x01
-#define ACK_PERIOD_CODE			0x02
+//#define ACK_PERIOD_CODE			0x02
 
 #define WAKEUP_ALIGN			1 /* in minute */
 #ifdef FAST_REPORTING
