@@ -124,8 +124,8 @@ void loop(void)
    	String strWeightRL(Weight.RearLeft, 3);
    	String strWeightRR(Weight.RearRight, 3);
    	String strWeightTotal(Weight.Total, 3);
-   	// String strSeq(seq, 10);
    	String messageData;
+
     messageData = strTime + " - Vbat=" + strVbat + " - T=" + strT + " - H=" + strH + " - FL=" + strWeightFL + " - FR=" + strWeightFR + " - RL=" + strWeightRL + " - RR=" + strWeightRR + " - W=" + strWeightTotal;
    	r_size = strlen(messageData.c_str());
     	for (uint32_t i = 0; i < r_size; i++) {
@@ -136,6 +136,7 @@ void loop(void)
 #ifdef DEBUG_HIVETRONIC
     	printf("\nSending Message (length=%d) : %s\r\n", (int)r_size,message);
 #endif /* DEBUG_HIVETRONIC*/
+
 #ifdef LORA_ENABLED
 	initLoRa();
 	// FIX THIS - Is it really needed ???
@@ -145,7 +146,6 @@ void loop(void)
     ret = sx1272.sendPacketTimeoutACK(DEFAULT_DEST_ADDR, message, r_size);
     // Power OFF the module
 	sx1272.OFF();
-#endif
 #ifdef DEBUG_HIVETRONIC
     printf("Packet sent - state %d\r\n", ret);
     if (ret == 3)
@@ -157,6 +157,7 @@ void loop(void)
 		sx1272.getAckPacket(DEFAULT_DEST_ADDR, AckMessage, &AckSize);
 		handleAckData(AckMessage, &AckSize, &gwAckData);
 	}
+#endif
 	enterLowPower(LOW_POWER_MODE, inactiveDuration);
 }
 
@@ -626,14 +627,14 @@ uint32_t measureHX711(Weight_t* Weight) {
 			adcFrontRight.power_down();
 		}
 		RearLeftTab[i]   = (int32_t) adcRearLeft.get_units();
-		if (i!=(ADC_NB_SAMPLES-1)) {
+		if (i==(ADC_NB_SAMPLES-1)) {
 			adcRearLeft.power_down();
 		}
 		RearRightTab[i]  = (int32_t) adcRearRight.get_units();
-		if (i!=(ADC_NB_SAMPLES-1)) {
-			delay(100);
-		} else {
+		if (i==(ADC_NB_SAMPLES-1)) {
 			adcRearRight.power_down();
+		} else {
+			delay(100);
 		}
 
 	}
