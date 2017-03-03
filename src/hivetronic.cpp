@@ -55,7 +55,7 @@ void setup() {
 
 	// Open serial communications and wait for port to open:
 	Serial.begin(115200);
-	delay(1);
+	//delay(1);
 	// set pin of HX711
 	pinMode(HX711_PD_SCK1, OUTPUT);
 	pinMode(HX711_PD_SCK2, OUTPUT);
@@ -115,10 +115,16 @@ void loop(void)
 	char cDateTime[26];
 
 	/* measure weight, temperature/humidity, Vbat */
-	measureTempHum(&Temp, &Hum); /* must be done at least 1s after power-up */
-	measureVbat(&VbatADC); /* VbatADC = Vbat/3 */
+  	// ARO DBG TRACE
+  	digitalWrite(DBG1, LOW);
+  	measureTempHum(&Temp, &Hum); /* must be done at least 1s after power-up */
+  	// ARO DBG TRACE
+  	digitalWrite(DBG1, HIGH);
+  	measureVbat(&VbatADC); /* VbatADC = Vbat/3 */
 	Vbat = 3*3.3*VbatADC/4095; /* 12-bit resolution, Vref+=3.3V */
-	measureHX711(&Weight);
+  	// ARO DBG TRACE
+  	digitalWrite(DBG1, LOW);
+  	measureHX711(&Weight);
 
 #ifdef DEBUG_HIVETRONIC
 	// printf("\r\n");
@@ -129,6 +135,8 @@ void loop(void)
 	* recording of a fixed weight at different temperature is not available
 	*/
 	// adjustWeight(&Weight, Temp);
+  	// ARO DBG TRACE
+  	digitalWrite(DBG1, HIGH);
 	getRTCDateTime(&time);
 	sprintf(cDateTime, "%02d/%02d/%4d-%02d:%02d:%02d",
 			time.tm_mday,
@@ -160,14 +168,20 @@ void loop(void)
 #endif /* DEBUG_HIVETRONIC*/
 
 #ifdef LORA_ENABLED
-	initLoRa();
-	// FIX THIS - Is it really needed ???
+  	// ARO DBG TRACE
+  	digitalWrite(DBG1, LOW);
+  	initLoRa();
+  	// ARO DBG TRACE
+  	digitalWrite(DBG1, HIGH);
+ 	// FIX THIS - Is it really needed ???
 	// sx1272.CarrierSense();
 	// END OF FIX THIS
 	sx1272.setPacketType(PKT_TYPE_DATA);
     ret = sx1272.sendPacketTimeoutACK(DEFAULT_DEST_ADDR, message, r_size);
     // Power OFF the module
-	sx1272.OFF();
+  	// ARO DBG TRACE
+  	digitalWrite(DBG1, LOW);
+  	sx1272.OFF();
 #ifdef DEBUG_HIVETRONIC
     //printf("LoRa Packet sent - state %d\r\n", ret);
     printf("LoRa Packet sent - ");
@@ -181,7 +195,9 @@ void loop(void)
 		handleAckData(AckMessage, &AckSize, &gwAckData);
 	}
 #endif
-	enterLowPower(LOW_POWER_MODE, inactiveDuration);
+  	// ARO DBG TRACE
+  	digitalWrite(DBG1, HIGH);
+  	enterLowPower(LOW_POWER_MODE, inactiveDuration);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -199,7 +215,9 @@ void GotoLowPower(uint32_t LowPowerMode) {
 		SYST_CSR = systick_csr;
 	}
 	else {
-		RCC_ClkInitTypeDef LowPowerClkConfig;
+  		// ARO DBG TRACE
+  		digitalWrite(DBG1, LOW);
+  		RCC_ClkInitTypeDef LowPowerClkConfig;
 		RCC_OscInitTypeDef LowPowerOscConfig;
 		/* Stop SysTick */
 		HAL_SuspendTick();
@@ -237,7 +255,9 @@ void GotoLowPower(uint32_t LowPowerMode) {
 			for(;;);
 			break;
 		case PM_SHUTDOWN:
-			HAL_PWREx_EnterSHUTDOWNMode();
+  			// ARO DBG TRACE
+  			digitalWrite(DBG1, HIGH);
+  			HAL_PWREx_EnterSHUTDOWNMode();
 			for(;;);
 			break;
 		default:

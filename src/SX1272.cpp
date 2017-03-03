@@ -5484,6 +5484,8 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
     { // LoRa mode
         clearFlags();   // Initializing flags
 
+        // ARO DBG TRACE
+        digitalWrite(DBG2, LOW);
         writeRegister(REG_OP_MODE, LORA_TX_MODE);  // LORA mode - Tx
 
         #if (SX1272_debug_mode > 1)
@@ -5505,6 +5507,8 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
                 previous = millis();
             }
         }
+        // ARO DBG TRACE
+        digitalWrite(DBG2, HIGH);
         state = 1;
     }
     else
@@ -5737,11 +5741,15 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
     #ifdef W_REQUESTED_ACK
     _requestACK = 1;
     #endif
-    state = sendPacketTimeout(dest, payload);   // Sending packet to 'dest' destination
+    // ARO DBG TRACE
+    digitalWrite(DBG2, HIGH);
+   state = sendPacketTimeout(dest, payload);   // Sending packet to 'dest' destination
 
     if( state == 0 )
     {
         state = receive();  // Setting Rx mode to wait an ACK
+        // ARO DBG TRACE
+        digitalWrite(DBG2, LOW);
     }
     else
     {
@@ -5755,7 +5763,11 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
         // Added by ARO: time out of 2.1s instead of default MAX_TIMEOUT (8s)
         if( availableData(2100) )
         {
+            // ARO DBG TRACE
+            digitalWrite(DBG2, HIGH);
             state_f = getACK(); // Getting ACK
+            // ARO DBG TRACE
+            digitalWrite(DBG2, LOW);
         }
         else
         {
