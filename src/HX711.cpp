@@ -38,7 +38,7 @@ void HX711::set_gain(byte gain) {
 	}
 
 	digitalWrite(PD_SCK, LOW);
-	//read();
+	read();
 }
 
 long HX711::read() {
@@ -53,6 +53,7 @@ long HX711::read() {
 	uint8_t filler = 0x00;
 
 	// pulse the clock pin 24 times to read the data
+	__disable_irq();
 	data[2] = shiftIn(DOUT, PD_SCK, MSBFIRST);
 	data[1] = shiftIn(DOUT, PD_SCK, MSBFIRST);
 	data[0] = shiftIn(DOUT, PD_SCK, MSBFIRST);
@@ -62,6 +63,7 @@ long HX711::read() {
 		digitalWrite(PD_SCK, HIGH);
 		digitalWrite(PD_SCK, LOW);
 	}
+	__enable_irq();
 
 	// Replicate the most significant bit to pad out a 32-bit signed integer
 	if (data[2] & 0x80) {

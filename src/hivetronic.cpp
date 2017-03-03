@@ -65,6 +65,11 @@ void setup() {
 	digitalWrite(HX711_PD_SCK2, HIGH);
 	digitalWrite(HX711_PD_SCK3, HIGH);
 	digitalWrite(HX711_PD_SCK4, HIGH);
+	delay(1);
+	digitalWrite(HX711_PD_SCK1, LOW);
+	digitalWrite(HX711_PD_SCK2, LOW);
+	digitalWrite(HX711_PD_SCK3, LOW);
+	digitalWrite(HX711_PD_SCK4, LOW);
 	// set pins of SX1276
 	pinMode(LoRa_NSS, OUTPUT);
 	pinMode(LoRa_RST, OUTPUT);
@@ -73,9 +78,7 @@ void setup() {
 	// set debug pin
 	//pinMode(DBG1, OUTPUT);
 	//pinMode(DBG2, OUTPUT);
-	digitalWrite(DBG1, HIGH);
-	digitalWrite(DBG2, LOW);
-
+	//digitalWrite(DBG1, LOW);
 #ifdef DEBUG_HIVETRONIC
 	// Print a start message
 	printf("\n\n\r");
@@ -93,11 +96,10 @@ void setup() {
 #endif /* DEBUG_HIVETRONIC */
 	WakeUp();
   	initGPIO();
-	initRTC();
-	initADC();
-	initDHT();
+  	initRTC();
+  	initDHT();
   	MX_ADC1_Init();
-
+  	initADC();
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -115,15 +117,9 @@ void loop(void)
 	char cDateTime[26];
 
 	/* measure weight, temperature/humidity, Vbat */
-  	// ARO DBG TRACE
-  	digitalWrite(DBG1, LOW);
   	measureTempHum(&Temp, &Hum); /* must be done at least 1s after power-up */
-  	// ARO DBG TRACE
-  	digitalWrite(DBG1, HIGH);
   	measureVbat(&VbatADC); /* VbatADC = Vbat/3 */
 	Vbat = 3*3.3*VbatADC/4095; /* 12-bit resolution, Vref+=3.3V */
-  	// ARO DBG TRACE
-  	digitalWrite(DBG1, LOW);
   	measureHX711(&Weight);
 
 #ifdef DEBUG_HIVETRONIC
@@ -131,12 +127,10 @@ void loop(void)
 	// printf("-------------\r\n");
 #endif /* DEBUG_HIVETRONIC */
 	/*
-	* remove temp adjustment as long as calibration and 
+	* remove temp adjustment as long as calibration and
 	* recording of a fixed weight at different temperature is not available
 	*/
 	// adjustWeight(&Weight, Temp);
-  	// ARO DBG TRACE
-  	digitalWrite(DBG1, HIGH);
 	getRTCDateTime(&time);
 	sprintf(cDateTime, "%02d/%02d/%4d-%02d:%02d:%02d",
 			time.tm_mday,
@@ -168,19 +162,13 @@ void loop(void)
 #endif /* DEBUG_HIVETRONIC*/
 
 #ifdef LORA_ENABLED
-  	// ARO DBG TRACE
-  	digitalWrite(DBG1, LOW);
   	initLoRa();
-  	// ARO DBG TRACE
-  	digitalWrite(DBG1, HIGH);
  	// FIX THIS - Is it really needed ???
 	// sx1272.CarrierSense();
 	// END OF FIX THIS
 	sx1272.setPacketType(PKT_TYPE_DATA);
     ret = sx1272.sendPacketTimeoutACK(DEFAULT_DEST_ADDR, message, r_size);
     // Power OFF the module
-  	// ARO DBG TRACE
-  	digitalWrite(DBG1, LOW);
   	sx1272.OFF();
 #ifdef DEBUG_HIVETRONIC
     //printf("LoRa Packet sent - state %d\r\n", ret);
@@ -195,8 +183,6 @@ void loop(void)
 		handleAckData(AckMessage, &AckSize, &gwAckData);
 	}
 #endif
-  	// ARO DBG TRACE
-  	digitalWrite(DBG1, HIGH);
   	enterLowPower(LOW_POWER_MODE, inactiveDuration);
 }
 
@@ -215,8 +201,6 @@ void GotoLowPower(uint32_t LowPowerMode) {
 		SYST_CSR = systick_csr;
 	}
 	else {
-  		// ARO DBG TRACE
-  		digitalWrite(DBG1, LOW);
   		RCC_ClkInitTypeDef LowPowerClkConfig;
 		RCC_OscInitTypeDef LowPowerOscConfig;
 		/* Stop SysTick */
@@ -255,8 +239,6 @@ void GotoLowPower(uint32_t LowPowerMode) {
 			for(;;);
 			break;
 		case PM_SHUTDOWN:
-  			// ARO DBG TRACE
-  			digitalWrite(DBG1, HIGH);
   			HAL_PWREx_EnterSHUTDOWNMode();
 			for(;;);
 			break;
@@ -375,7 +357,7 @@ uint32_t getNextAlarm(tm* alarm, tm time) {
 
 	/* Select reporting period depending on time and sunrise/sunset */
 	reporting_period = NIGHTTIME_REPORTING;
-	if (((float)(time.tm_hour+time.tm_min/60)>(float)(daylight.sunrise.hour+daylight.sunrise.min/60)) and 
+	if (((float)(time.tm_hour+time.tm_min/60)>(float)(daylight.sunrise.hour+daylight.sunrise.min/60)) and
 		((float)(time.tm_hour+time.tm_min/60)<(float)(daylight.sunset.hour+daylight.sunset.min/60))) {
 			reporting_period = DAYTIME_REPORTING;
 	}
@@ -389,7 +371,7 @@ uint32_t getNextAlarm(tm* alarm, tm time) {
 #else /* FAST_REPORTING*/
 	addDateTime(alarm, time, reporting_period);
 #endif /* FAST_REPORTING */
-	return NO_ERROR; 
+	return NO_ERROR;
 }
 
 uint32_t addDateTime(tm* endtime, tm starttime, uint32_t duration) {
@@ -511,7 +493,7 @@ uint32_t setRTCDateTime(tm time) {
 	// reactivate write protection
 	RTC_WPR = 0xDE;
 	RTC_WPR = 0xAD;
-	delay(50);
+	//delay(50);
 	return NO_ERROR;
 #else /* !RTC_HAL */
 	RTC_TimeTypeDef sTime;
@@ -877,7 +859,7 @@ uint32_t initRTC(void) {
     RCC_APB2ENR |= 0x01;
     // set PWREN
     RCC_APB1ENR1 |= 0x10000000;
-    delay(100);
+    //delay(100);
     // set DBP
     PWR_CR1 |= 0x0100;
     // set RTCSEL=LSE and set LSEON
@@ -911,15 +893,12 @@ uint32_t initADC(void) {
 	// Might need temperature compensation:
 	// 		Offset drift:	+/- 6nV/°C
 	//		Gain drift:		+/- 5ppm/°C
-	int32_t adc[4];
-#ifdef DEBUG_HIVETRONIC_N
-	printf("initializing HX711 converters ...\r\n");
-#endif /* DEBUG_HIVETRONIC*/
+
 	// Power up all ADC
-	adcFrontLeft.power_up();
-	adcFrontRight.power_up();
-	adcRearLeft.power_up();
-	adcRearRight.power_up();
+	digitalWrite(HX711_PD_SCK1, LOW);
+	digitalWrite(HX711_PD_SCK2, LOW);
+	digitalWrite(HX711_PD_SCK3, LOW);
+	digitalWrite(HX711_PD_SCK4, LOW);
 	// Settling time is 400ms at 10Hz to get a stable output
 	// As first readings are executed to configure next readings, no need to have stable output
 	// During initial phase of the project, it is anyway better to wait for stable output
@@ -939,26 +918,7 @@ uint32_t initADC(void) {
 	adcFrontRight.set_scale(ADC_SCALE);
 	adcRearLeft.set_scale(ADC_SCALE);
 	adcRearRight.set_scale(ADC_SCALE);
-	// Read once all ADC to initialize next read access
-	adc[0]=adcFrontLeft.get_units();
-	adc[1]=adcFrontRight.get_units();
-	adc[2]=adcRearLeft.get_units();
-	adc[3]=adcRearRight.get_units();
-	// Power down all ADC
-	/* No need to power down as init will be done after each and every standby-shutdown
-	adcFrontLeft.power_down();
-	adcFrontRight.power_down();
-	adcRearLeft.power_down();
-	adcRearRight.power_down();
-	*/
-	
-#ifdef DEBUG_HIVETRONIC_N
-	printf("\tFrontLeft:\t%ld\r\n",adc[0]);
-	printf("\tFrontRight:\t%ld\r\n",adc[1]);
-	printf("\tRearLeft:\t%ld\r\n",adc[2]);
-	printf("\tRearRight:\t%ld\r\n",adc[3]);
-	printf("... init done\r\n");
-#endif /* DEBUG_HIVETRONIC*/
+	// No need to read once all ADC to initialize (done in begin)
 	return NO_ERROR;
 }
 

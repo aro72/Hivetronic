@@ -134,8 +134,6 @@ void SystemClock_Config(void)
       while(1);
   }
 
-  // ARO DBG TRACE
-  digitalWrite(DBG1, LOW);
 
   /* MSI is enabled after System reset, activate PLL with MSI as source */
   RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_LSE|RCC_OSCILLATORTYPE_MSI;
@@ -156,8 +154,6 @@ void SystemClock_Config(void)
     while(1);
   }
 
-  // ARO DBG TRACE
-  digitalWrite(DBG1, HIGH);
 
   /* Select PLL as system clock source and configure the HCLK, PCLK1 and PCLK2
      clocks dividers */
@@ -172,8 +168,6 @@ void SystemClock_Config(void)
     while(1);
   }
 
-  // ARO DBG TRACE
-  digitalWrite(DBG1, LOW);
 
   PeriphClkInit.PeriphClockSelection = RCC_PERIPHCLK_RTC | RCC_PERIPHCLK_ADC;
   PeriphClkInit.AdcClockSelection = RCC_ADCCLKSOURCE_SYSCLK;
@@ -184,8 +178,6 @@ void SystemClock_Config(void)
       while(1);
   }
 
-  // ARO DBG TRACE
-  digitalWrite(DBG1, HIGH);
 }
 
 /**
@@ -197,9 +189,6 @@ void hw_config_init(void)
 {
   //Initialize the HAL
   HAL_Init();
-
-  // ARO DBG TRACE
-  digitalWrite(DBG1, HIGH);
 
   // Configure the system clock
   SystemClock_Config();

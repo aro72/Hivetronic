@@ -30,6 +30,7 @@
 #include <SPI.h>
 
 #define ARO
+#define DBG1                14 /* PB8 */
 
 /*  CHANGE LOGS by C. Pham
  *
@@ -527,7 +528,7 @@ SX1272::SX1272()
         writeRegister(REG_OP_MODE, FSK_SLEEP_MODE);    // Sleep mode (mandatory to set LoRa mode)
         writeRegister(REG_OP_MODE, LORA_SLEEP_MODE);    // LoRa sleep mode
         writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);
-        delay(50+retry*10);
+        //delay(50+retry*10);
         st0 = readRegister(REG_OP_MODE);
         //Serial.println(F("..."));
 
@@ -600,7 +601,7 @@ SX1272::SX1272()
     config1 = config1 & B00111111;
     writeRegister(REG_SYNC_CONFIG,config1);
 
-    delay(100);
+    // ARO - delay(100);
 
     st0 = readRegister(REG_OP_MODE);    // Reading config mode
     if( st0 == FSK_STANDBY_MODE )
@@ -2157,7 +2158,7 @@ SX1272::SX1272()
 
     writeRegister(REG_MODEM_CONFIG1,config1);       // Update config1
 
-    delay(100);
+    // ARO - delay(100);
 
     config1 = (readRegister(REG_MODEM_CONFIG1));
 
@@ -5485,7 +5486,7 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
         clearFlags();   // Initializing flags
 
         // ARO DBG TRACE
-        digitalWrite(DBG2, LOW);
+        digitalWrite(DBG1, LOW);
         writeRegister(REG_OP_MODE, LORA_TX_MODE);  // LORA mode - Tx
 
         #if (SX1272_debug_mode > 1)
@@ -5497,6 +5498,8 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
         Serial.println(F("ERROR"));
         #endif
         value = readRegister(REG_IRQ_FLAGS);
+        // ARO - delay to avoid consumption on SPI
+        delay(1000);
         // Wait until the packet is sent (TX Done flag) or the timeout expires
         while ((bitRead(value, 3) == 0) && (millis() - previous < wait))
         {
@@ -5508,7 +5511,7 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
             }
         }
         // ARO DBG TRACE
-        digitalWrite(DBG2, HIGH);
+        digitalWrite(DBG1, HIGH);
         state = 1;
     }
     else
@@ -5741,15 +5744,12 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
     #ifdef W_REQUESTED_ACK
     _requestACK = 1;
     #endif
-    // ARO DBG TRACE
-    digitalWrite(DBG2, HIGH);
+
    state = sendPacketTimeout(dest, payload);   // Sending packet to 'dest' destination
 
     if( state == 0 )
     {
         state = receive();  // Setting Rx mode to wait an ACK
-        // ARO DBG TRACE
-        digitalWrite(DBG2, LOW);
     }
     else
     {
@@ -5760,14 +5760,9 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
         // added by C. Pham
         Serial.println(F("wait for ACK"));
 
-        // Added by ARO: time out of 2.1s instead of default MAX_TIMEOUT (8s)
-        if( availableData(2100) )
+        if( availableData() )
         {
-            // ARO DBG TRACE
-            digitalWrite(DBG2, HIGH);
-            state_f = getACK(); // Getting ACK
-            // ARO DBG TRACE
-            digitalWrite(DBG2, LOW);
+           state_f = getACK(); // Getting ACK
         }
         else
         {
@@ -5822,7 +5817,11 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
     }
     if( state == 0 )
     {
-        if( availableData() )
+        // ARO - 1000ms wait before checking data availability to reduce power
+        delay(1250);
+
+        // Added by ARO: time out of 2.1s instead of default MAX_TIMEOUT (8s)
+        if( availableData(2100) )
         { 
             state_f = getACK(); // Getting ACK
         }
