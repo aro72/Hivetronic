@@ -89,9 +89,7 @@ void setup() {
 		printf("... Wake-up from Standby\r\n");
 	}
 	*/
-	printf("///////////////////////////////////////////////////////\r\n");
-	//printf("\r\n");
-	printf("Hive monitor using HX711 and LoRa\r\n");
+	printf("//////////////////////////\r\n");
 	//printf("ARM (STM32)\r\n");
 #endif /* DEBUG_HIVETRONIC */
 	WakeUp();
@@ -158,7 +156,7 @@ void loop(void)
     message[r_size]='\r';
     message[r_size+1]='\n';
 #ifdef DEBUG_HIVETRONIC
-    	printf("\nSending Message (length=%d) : %s\r\n", (int)r_size,message);
+    	printf("\nMessage (l=%d) : %s\r\n", (int)r_size,message);
 #endif /* DEBUG_HIVETRONIC*/
 
 #ifdef LORA_ENABLED
