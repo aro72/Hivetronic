@@ -51,6 +51,8 @@
 #define HX711_DOUT4   		7
 #define HX711_PD_SCK1 		8
 #define DHTPIN 				9
+#define LoRa_NSS			10
+#define LoRa_RST			A0
 /* Other pins used for LoRa
 		SPI CS/NSS 	--> 	10
 		SPI MOSI 	--> 	11

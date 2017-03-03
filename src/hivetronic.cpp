@@ -55,15 +55,22 @@ void setup() {
 
 	// Open serial communications and wait for port to open:
 	Serial.begin(115200);
-	delay(10);
+	delay(1);
+	// set pin of HX711
 	pinMode(HX711_PD_SCK1, OUTPUT);
-	digitalWrite(HX711_PD_SCK1, HIGH);
 	pinMode(HX711_PD_SCK2, OUTPUT);
-	digitalWrite(HX711_PD_SCK2, HIGH);
 	pinMode(HX711_PD_SCK3, OUTPUT);
-	digitalWrite(HX711_PD_SCK3, HIGH);
 	pinMode(HX711_PD_SCK4, OUTPUT);
+	digitalWrite(HX711_PD_SCK1, HIGH);
+	digitalWrite(HX711_PD_SCK2, HIGH);
+	digitalWrite(HX711_PD_SCK3, HIGH);
 	digitalWrite(HX711_PD_SCK4, HIGH);
+	// set pins of SX1276
+	pinMode(LoRa_NSS, OUTPUT);
+	pinMode(LoRa_RST, OUTPUT);
+	digitalWrite(LoRa_NSS, HIGH);
+	digitalWrite(LoRa_RST, LOW);
+
 	// Print a start message
 #ifdef DEBUG_HIVETRONIC
 	printf("\n\n\r");

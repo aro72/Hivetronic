@@ -165,7 +165,9 @@ SX1272::SX1272()
     // Powering the module
     pinMode(SX1272_SS,OUTPUT);
     digitalWrite(SX1272_SS,HIGH);
+    /* ARO
     delay(100);
+    */
 
     //#define USE_SPI_SETTINGS
 
@@ -187,16 +189,24 @@ SX1272::SX1272()
     SPI.setDataMode(SPI_MODE0);
     #endif  
 
+    /* ARO
     delay(10);
+    */
 
     // added by C. Pham
+    /* ARO 
     pinMode(SX1272_RST,OUTPUT);
     digitalWrite(SX1272_RST,HIGH);
     delay(100);
     digitalWrite(SX1272_RST,LOW);
     delay(500);
+    */
+    delay(1);
     pinMode(SX1272_RST, INPUT_PULLUP);
+    /* ARO
     delay(500);
+    */
+    delay(5);
 
     // from single_chan_pkt_fwd by Thomas Telkamp
     uint8_t version = readRegister(REG_VERSION);
@@ -207,21 +217,23 @@ SX1272::SX1272()
         // sx1272
         Serial.println(F("SX1272 detected, starting"));
         _board = SX1272Chip;
+    } else {
+    // sx1276?
+    /* ARO 
+    digitalWrite(SX1272_RST, LOW);
+    delay(100);
+    digitalWrite(SX1272_RST, HIGH);
+    delay(100);
+    version = readRegister(REG_VERSION);
+    */
+    if (version == 0x12) {
+        // sx1276
+        //Serial.println(F("SX1276 detected, starting"));
+        _board = SX1276Chip;
         } else {
-        // sx1276?
-        digitalWrite(SX1272_RST, LOW);
-        delay(100);
-        digitalWrite(SX1272_RST, HIGH);
-        delay(100);
-        version = readRegister(REG_VERSION);
-        if (version == 0x12) {
-            // sx1276
-            //Serial.println(F("SX1276 detected, starting"));
-            _board = SX1276Chip;
-            } else {
-                Serial.println(F("Unrecognized transceiver"));
-            }
+            Serial.println(F("Unrecognized transceiver"));
         }
+    }
     // end from single_chan_pkt_fwd by Thomas Telkamp
 
     // added by C. Pham
@@ -509,7 +521,9 @@ SX1272::SX1272()
     uint8_t retry=0;
 
     do {
+        /* ARO
         delay(200);
+        */
         writeRegister(REG_OP_MODE, FSK_SLEEP_MODE);    // Sleep mode (mandatory to set LoRa mode)
         writeRegister(REG_OP_MODE, LORA_SLEEP_MODE);    // LoRa sleep mode
         writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);
@@ -518,10 +532,10 @@ SX1272::SX1272()
         //Serial.println(F("..."));
 
         if ((retry % 2)==0)
-        if (retry==20)
-        retry=0;
-        else
-        retry++;
+            if (retry==20)
+                retry=0;
+            else
+                retry++;
         /*
         if (st0!=LORA_STANDBY_MODE) {
             pinMode(SX1272_RST,OUTPUT);
@@ -679,7 +693,9 @@ SX1272::SX1272()
     #endif
 
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay(100);
+    /* ARO 
+    delay(100); */
+    delay(1);
     return state;
 }
 
@@ -1125,7 +1141,9 @@ SX1272::SX1272()
     #endif
 
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay(100);
+    /* ARO
+    delay(100); */
+    delay(1);
     return state;
 }
 
@@ -1815,7 +1833,9 @@ SX1272::SX1272()
         // here we write the new SF
         writeRegister(REG_MODEM_CONFIG2, config2);      // Update config2
 
-        delay(100);
+        /* ARO
+        delay(100); */
+        delay(1);
 
         // added by C. Pham
         byte configAgc;
@@ -1893,7 +1913,9 @@ SX1272::SX1272()
     }
 
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay(100);
+    /* ARO
+    delay(100); */
+    delay(1);
 
     if( isSF(spr) )
     { // Checking available value for _spreadingFactor
@@ -2241,7 +2263,9 @@ SX1272::SX1272()
         #endif
     }
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay(100);
+    /* ARO
+    delay(100); */
+    delay(1);
     return state;
 }
 
@@ -2409,7 +2433,9 @@ SX1272::SX1272()
     }
     writeRegister(REG_MODEM_CONFIG1, config1);      // Update config1
 
-    delay(100);
+    /* ARO
+    delay(100); */
+    delay(1);
 
     config1 = readRegister(REG_MODEM_CONFIG1);
 
@@ -2465,7 +2491,9 @@ SX1272::SX1272()
         #endif
     }
     writeRegister(REG_OP_MODE,st0); // Getting back to previous status
-    delay(100);
+    /* ARO
+    delay(100); */
+    delay(1);
     return state;
 }
 
@@ -2599,7 +2627,9 @@ SX1272::SX1272()
     if( _modem == LORA )
     {
         // LoRa Stdby mode in order to write in registers
-        writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);
+        /* ARO */
+        if (st0!=LORA_STANDBY_MODE)
+            writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);
     }
     else
     {
@@ -2618,7 +2648,9 @@ SX1272::SX1272()
     // added by C. Pham
     _stoptime=millis();
 
-    delay(100);
+    /* ARO
+    delay(100); */
+    delay(1);
 
     // storing MSB in freq channel value
     freq3 = (readRegister(REG_FRF_MSB));
@@ -2645,6 +2677,9 @@ SX1272::SX1272()
     else
     {
         state = 1;
+        #if 1 /* ARO */
+        printf("Bad Frequency: %ld instead of %ld\r\n", freq, ch);
+        #endif
     }
 
     if(!isChannel(ch) )
@@ -2659,7 +2694,9 @@ SX1272::SX1272()
     }
 
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay(100);
+    /* ARO
+    delay(100); */
+    delay(1);
     return state;
 }
 
@@ -2833,7 +2870,9 @@ SX1272::SX1272()
     }
 
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay(100);
+    /* ARO
+    delay(100); */
+    delay(1);
     return state;
 }
 
@@ -2906,7 +2945,9 @@ SX1272::SX1272()
     }
 
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay(100);
+    /* ARO
+    delay(100); */
+    delay(1);
     return state;
 }
 
@@ -3015,7 +3056,9 @@ SX1272::SX1272()
     #endif
 
     writeRegister(REG_OP_MODE, st0);    // Getting back to previous status
-    delay(100);
+    /* ARO
+    delay(100); */
+    delay(1);
     return state;
 }
 
@@ -3140,7 +3183,9 @@ SX1272::SX1272()
     // comment by C. Pham
     // this delay is included in the send delay overhead
     // TODO: do we really need this delay?
-    delay(250);
+    /* ARO
+    delay(250); */
+    delay(5);
     return state;
 }
 
@@ -3569,7 +3614,9 @@ return state;
         st0 = readRegister(REG_OP_MODE);    // Save the previous status
         if( _modem == LORA )
         { // LoRa mode
-            writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // Set LoRa Standby mode to write in registers
+            /* ARO */
+            if (st0!=LORA_STANDBY_MODE)
+                writeRegister(REG_OP_MODE, LORA_STANDBY_MODE);  // Set LoRa Standby mode to write in registers
         }
         else
         { // FSK mode
@@ -6761,7 +6808,9 @@ void SX1272::CarrierSense() {
 
     writeRegister(REG_SYNC_WORD, sw);
 
-    delay(100);
+    /* ARO
+    delay(100); */
+    delay(1);
 
     config1 = readRegister(REG_SYNC_WORD);
 
@@ -6784,7 +6833,10 @@ void SX1272::CarrierSense() {
     }
 
     writeRegister(REG_OP_MODE,st0); // Getting back to previous status
-    delay(100);
+    /* ARO
+    delay(100); */
+    delay(1);
+
     return state;
 }
 
