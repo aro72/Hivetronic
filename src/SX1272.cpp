@@ -187,7 +187,7 @@ SX1272::SX1272()
     SPI.setDataMode(SPI_MODE0);
     #endif  
 
-    delay(100);
+    delay(10);
 
     // added by C. Pham
     pinMode(SX1272_RST,OUTPUT);

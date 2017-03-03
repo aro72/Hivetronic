@@ -136,14 +136,13 @@ void loop(void)
    	String strWeightTotal(Weight.Total, 3);
    	String messageData;
 
-    //messageData = strTime + " - Vbat=" + strVbat + " - T=" + strT + " - H=" + strH + " - FL=" + strWeightFL + " - FR=" + strWeightFR + " - RL=" + strWeightRL + " - RR=" + strWeightRR + " - W=" + strWeightTotal + "\0";
-    messageData = strTime ;
+    messageData = strTime + " - Vbat=" + strVbat + " - T=" + strT + " - H=" + strH + " - FL=" + strWeightFL + " - FR=" + strWeightFR + " - RL=" + strWeightRL + " - RR=" + strWeightRR + " - W=" + strWeightTotal + "\0";
    	r_size = strlen(messageData.c_str());
-    	for (uint32_t i = 0; i < r_size; i++) {
-			message[i] = (uint8_t) messageData.c_str()[i];
-		}
-    	message[r_size]='\r';
-    	message[r_size+1]='\n';
+    for (uint32_t i = 0; i < r_size; i++) {
+		message[i] = (uint8_t) messageData.c_str()[i];
+	}
+    message[r_size]='\r';
+    message[r_size+1]='\n';
 #ifdef DEBUG_HIVETRONIC
     	printf("\nSending Message (length=%d) : %s\r\n", (int)r_size,message);
 #endif /* DEBUG_HIVETRONIC*/
