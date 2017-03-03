@@ -51,6 +51,8 @@
 #define HX711_DOUT4   		7
 #define HX711_PD_SCK1 		8
 #define DHTPIN 				9
+#define DBG1				14 /* PB8 */
+#define DBG2				15 /* PB9 */
 #define LoRa_NSS			10
 #define LoRa_RST			A0
 /* Other pins used for LoRa

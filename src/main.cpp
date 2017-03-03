@@ -21,6 +21,9 @@
 #include "Arduino.h"
 #include "stm32l4xx_ll_pwr.h"
 
+#define DBG1        14 /* PB8 */
+#define DBG2        15 /* PB9 */
+
 /*
  * Cortex-M3 Systick IT handler
  */
@@ -45,6 +48,12 @@ int main( void )
   // Initialize watchdog
   //watchdogSetup();
 
+  // set debug pin
+  pinMode(DBG1, OUTPUT);
+  pinMode(DBG2, OUTPUT);
+  digitalWrite(DBG1, LOW);
+  digitalWrite(DBG2, HIGH);
+  
   init();
 
   initVariant();

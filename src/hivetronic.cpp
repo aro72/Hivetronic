@@ -70,9 +70,14 @@ void setup() {
 	pinMode(LoRa_RST, OUTPUT);
 	digitalWrite(LoRa_NSS, HIGH);
 	digitalWrite(LoRa_RST, LOW);
+	// set debug pin
+	//pinMode(DBG1, OUTPUT);
+	//pinMode(DBG2, OUTPUT);
+	digitalWrite(DBG1, HIGH);
+	digitalWrite(DBG2, LOW);
 
-	// Print a start message
 #ifdef DEBUG_HIVETRONIC
+	// Print a start message
 	printf("\n\n\r");
 	/*
 	if (WakeUpFlag==0) {
