@@ -22,7 +22,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // INCLUDES
-#define FAST_REPORTING
+#define FAST_REPORTING_N
 #include "hivetronic.h"
 
 
@@ -156,7 +156,7 @@ void loop(void)
     message[r_size]='\r';
     message[r_size+1]='\n';
 #ifdef DEBUG_HIVETRONIC
-    	printf("\nMessage (l=%d) : %s\r\n", (int)r_size,message);
+    	printf("Message (l=%d) : %s\r\n", (int)r_size,message);
 #endif /* DEBUG_HIVETRONIC*/
 
 #ifdef LORA_ENABLED
@@ -170,7 +170,7 @@ void loop(void)
   	sx1272.OFF();
 #ifdef DEBUG_HIVETRONIC
     //printf("LoRa Packet sent - state %d\r\n", ret);
-    printf("LoRa Packet sent - ");
+    //printf("LoRa Packet sent - ");
     if (ret == 3)
 		printf("No Ack!\r\n");
 	if (ret == 0)
@@ -492,6 +492,11 @@ uint32_t setRTCDateTime(tm time) {
 	RTC_WPR = 0xDE;
 	RTC_WPR = 0xAD;
 	//delay(50);
+#ifdef DEBUG_HIVETRONIC
+	printf("Set Time/Date\r\n");
+	printf("RTC_DR: %x\r\n", RTC_DR);
+	printf("RTC_TR: %x\r\n", RTC_TR);
+#endif /* DEBUG_HIVETRONIC*/
 	return NO_ERROR;
 #else /* !RTC_HAL */
 	RTC_TimeTypeDef sTime;
@@ -731,7 +736,7 @@ uint32_t measureHX711(Weight_t* Weight) {
 	FrontRight_avg /= ADC_NB_SAMPLES-ADC_DROPPED_SAMPLES;
 	RearLeft_avg /= ADC_NB_SAMPLES-ADC_DROPPED_SAMPLES;
 	RearRight_avg /= ADC_NB_SAMPLES-ADC_DROPPED_SAMPLES;
-#ifdef DEBUG_HX711
+#ifdef DEBUG_HX711_N
 	//printf("----------------------------------------------\r\n");
 	printf("Average:\t\t%.1f\t%.1f\t%.1f\t%.1f\r\n", FrontLeft_avg, FrontRight_avg, RearLeft_avg, RearRight_avg);
 #endif /* DEBUG_HX711 */
@@ -865,7 +870,7 @@ uint32_t initRTC(void) {
     // set RTCEN
     RCC_BDCR |= 0x00008000;
     // update date and time in RTC if DR contains the reset value
-	if (RTC_DR==0x00002101) {
+	if ((RTC_DR&0X00FF0000)==0x00160000) {
 		tm time;
 		time.tm_sec=0;
     	time.tm_min=0;
