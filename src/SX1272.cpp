@@ -30,7 +30,6 @@
 #include <SPI.h>
 
 #define ARO
-#define DBG1                14 /* PB8 */
 
 /*  CHANGE LOGS by C. Pham
  *
@@ -5485,8 +5484,6 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
     { // LoRa mode
         clearFlags();   // Initializing flags
 
-        // ARO DBG TRACE
-        digitalWrite(DBG1, LOW);
         writeRegister(REG_OP_MODE, LORA_TX_MODE);  // LORA mode - Tx
 
         #if (SX1272_debug_mode > 1)
@@ -5498,8 +5495,8 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
         Serial.println(F("ERROR"));
         #endif
         value = readRegister(REG_IRQ_FLAGS);
-        // ARO - delay to avoid consumption on SPI
-        delay(1000);
+        // delay to reduce power consumption on SPI
+        delay(730);
         // Wait until the packet is sent (TX Done flag) or the timeout expires
         while ((bitRead(value, 3) == 0) && (millis() - previous < wait))
         {
@@ -5510,8 +5507,6 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
                 previous = millis();
             }
         }
-        // ARO DBG TRACE
-        digitalWrite(DBG1, HIGH);
         state = 1;
     }
     else
@@ -5818,7 +5813,7 @@ uint8_t SX1272::receivePacketTimeout(uint16_t wait)
     if( state == 0 )
     {
         // ARO - 1000ms wait before checking data availability to reduce power
-        delay(1250);
+        delay(1100);
 
         // Added by ARO: time out of 2.1s instead of default MAX_TIMEOUT (8s)
         if( availableData(2100) )
