@@ -130,7 +130,7 @@ void loop(void)
 	*/
 	// adjustWeight(&Weight, Temp);
 	getRTCDateTime(&time);
-	sprintf(cDateTime, "%02d/%02d/%4d-%02d:%02d:%02d",
+	sprintf(cDateTime, "%02d/%02d/%4d;%02d:%02d:%02d",
 			time.tm_mday,
 			time.tm_mon+1,
 			(time.tm_year+1900),
