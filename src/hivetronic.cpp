@@ -1002,12 +1002,21 @@ void WakeUp() {
 }
 
 void initGPIO(void) {
+  	GPIO_InitTypeDef GPIO_InitStruct;
+	__HAL_RCC_GPIOC_CLK_ENABLE();
+  	/*Configure GPIO pins : PA8 PA9 PA10 */
+  	GPIO_InitStruct.Pin = GPIO_PIN_0;
+  	GPIO_InitStruct.Mode = GPIO_MODE_ANALOG_ADC_CONTROL;
+  	GPIO_InitStruct.Pull = GPIO_NOPULL;
+  	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
 	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_A, PWR_GPIOA_PULLUP);
 	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_B, PWR_GPIOB_PULLUP);
 	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_C, PWR_GPIOC_PULLUP);
 	HAL_PWREx_EnableGPIOPullDown(PWR_GPIO_C, PWR_GPIOC_PULLDOWN);
 	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_D, PWR_GPIOD_PULLUP);
 	LL_PWR_EnablePUPDCfg();
+	//pinMode(A5, INPUT);
 }
 
 /* ADC1 init function */
@@ -1057,9 +1066,9 @@ void MX_ADC1_Init(void)
 
     /**Configure Regular Channel
     */
-  //sConfig.Channel = ADC_CHANNEL_1;
+  sConfig.Channel = ADC_CHANNEL_1;
   //sConfig.Channel = ADC_CHANNEL_VBAT;
-  sConfig.Channel = ADC_CHANNEL_VREFINT;
+  //sConfig.Channel = ADC_CHANNEL_VREFINT;
   sConfig.Rank = 1;
   sConfig.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
@@ -1087,6 +1096,7 @@ uint32_t measureVbat(uint16_t *VbatADC) {
     /* Start Conversation Error */
     Error_Handler(ERROR_ADC_START);
   }
+  //delay(1000);
   if (HAL_ADC_PollForConversion(&hadc1, 100) != HAL_OK)
   {
     /* End Of Conversion flag not set on time */
