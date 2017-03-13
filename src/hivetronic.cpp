@@ -22,7 +22,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // INCLUDES
-#define FAST_REPORTING_N
+#define FAST_REPORTING
 #include "hivetronic.h"
 
 
@@ -115,14 +115,15 @@ void loop(void)
 	char cDateTime[26];
 
 	/* measure weight, temperature/humidity, Vbat */
-  	measureTempHum(&Temp, &Hum); /* must be done at least 1s after power-up */
+  	//measureTempHum(&Temp, &Hum); /* must be done at least 1s after power-up */
   	measureVbat(&VbatADC); /* VbatADC = Vbat/3 */
 	Vbat = 3*3.3*VbatADC/4095; /* 12-bit resolution, Vref+=3.3V */
   	measureHX711(&Weight);
+  	measureTempHum(&Temp, &Hum); /* must be done at least 1s after power-up */
 
 #ifdef DEBUG_HIVETRONIC
-	// printf("\r\n");
-	// printf("-------------\r\n");
+	//printf("\r\n");
+	//printf("-------------\r\n");
 #endif /* DEBUG_HIVETRONIC */
 	/*
 	* remove temp adjustment as long as calibration and
@@ -173,9 +174,9 @@ void loop(void)
     //printf("LoRa Packet sent - state %d\r\n", ret);
     //printf("LoRa Packet sent - ");
     if (ret == 3)
-		printf("No Ack!\r\n");
+		printf("\rNo Ack!\r\n");
 	if (ret == 0)
-		printf("Ack received from gateway!\r\n");
+		printf("\rAck received from gateway!\r\n");
 #endif /* DEBUG_HIVETRONIC*/
 	if (ret==0) {
 		sx1272.getAckPacket(DEFAULT_DEST_ADDR, AckMessage, &AckSize);
@@ -428,7 +429,7 @@ uint32_t setAlarm(tm alrm) {
 	RTC_ALARMAR |= 0x80000000;
 	// Configure EXTI line 18 in Rising Edge as RTC Alarm interrupt
 	__HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
-	HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH); /* Wake-up 5 = PC5 */
+	//HAL_PWR_EnableWakeUpPin(PWR_WAKEUP_PIN5_HIGH); /* Wake-up 5 = PC5 */
 	//HAL_PWREx_DisableInternalWakeUpLine();
 	//__HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
 	//__HAL_RTC_ALARM_EXTI_ENABLE_RISING_EDGE();
@@ -493,7 +494,7 @@ uint32_t setRTCDateTime(tm time) {
 	RTC_WPR = 0xDE;
 	RTC_WPR = 0xAD;
 	//delay(50);
-#ifdef DEBUG_HIVETRONIC
+#ifdef DEBUG_HIVETRONIC_N
 	printf("Set Time/Date\r\n");
 	printf("RTC_DR: %x\r\n", RTC_DR);
 	printf("RTC_TR: %x\r\n", RTC_TR);
@@ -956,7 +957,7 @@ uint32_t initLoRa(void) {
 	ret = sx1272.setNodeAddress(LORA_NODE_ADDR);
 #ifdef DEBUG_HIVETRONIC
 	//printf("Setting node addr: state %d\r\n", ret);
-	printf("SX1272/76 successfully configured\r\n");
+	//printf("SX1272/76 successfully configured\r\n");
 #endif /* DEBUG_HIVETRONIC*/
 	return NO_ERROR;
 }
@@ -1056,8 +1057,9 @@ void MX_ADC1_Init(void)
 
     /**Configure Regular Channel
     */
-  sConfig.Channel = ADC_CHANNEL_VBAT;
-  //sConfig.Channel = ADC_CHANNEL_VREFINT;
+  //sConfig.Channel = ADC_CHANNEL_1;
+  //sConfig.Channel = ADC_CHANNEL_VBAT;
+  sConfig.Channel = ADC_CHANNEL_VREFINT;
   sConfig.Rank = 1;
   sConfig.SamplingTime = ADC_SAMPLETIME_640CYCLES_5;
   sConfig.SingleDiff = ADC_SINGLE_ENDED;
@@ -1093,6 +1095,9 @@ uint32_t measureVbat(uint16_t *VbatADC) {
   ADCvalue = HAL_ADC_GetValue(&hadc1);
   HAL_ADC_Stop(&hadc1);
   *VbatADC = ADCvalue;
+#ifdef DEBUG_HIVETRONIC
+	printf("ADC raw = %ld\r\n", *VbatADC);
+#endif
   return NO_ERROR;
 }
 
