@@ -34,8 +34,6 @@
 #define LORAMODE  				4
 #define LORAPOWER 				'x'
 #define LORA_NODE_ADDR 			8
-#define LORA_REPORTING_PERIOD	20 // in second
-#define PROCESSING_DURATION 	5 // FIX THIS: to be measured and updated
 // HX711  CONFIGURATION
 #define HX711_GAIN				128
 
@@ -55,6 +53,7 @@
 #define DBG2				15 /* PB9 */
 #define LoRa_NSS			10
 #define LoRa_RST			A0
+#define VBAT_DIV3			A5 /* PC0 */
 /* Other pins used for LoRa
 		SPI CS/NSS 	--> 	10
 		SPI MOSI 	--> 	11
@@ -274,7 +273,7 @@ uint32_t initRTC(void);
 uint32_t setRTCDateTime(tm* time);
 uint32_t getRTCDateTime(tm* time);
 uint32_t configureClock(void);
-uint32_t enterLowPower(uint32_t mode, uint32_t duration);
+uint32_t enterLowPower(uint32_t mode);
 uint32_t addDateTime(tm* endtime, tm starttime, uint32_t duration);
 uint32_t setAlarm(tm alrm);
 void GotoLowPower(uint32_t LowPowerMode);

@@ -37,17 +37,16 @@
 
 DHT dht(DHTPIN, DHTTYPE);
 HX711 adcFrontLeft, adcFrontRight, adcRearLeft, adcRearRight;
-int loraMode = LORAMODE;
-uint32_t seq = 0;
-uint32_t inactiveDuration = LORA_REPORTING_PERIOD-PROCESSING_DURATION;
-uint32_t WakeUpFlag=0, PullUpGPIOA;
 ADC_HandleTypeDef hadc1;
 RTC_HandleTypeDef hrtc;
+Weight_t Weight;
+tm currentTime;
 float Temp = NAN;
 float Hum = NAN;
-Weight_t Weight;
 float Vbat=0;
-tm currentTime;
+int loraMode = LORAMODE;
+uint32_t seq = 0;
+uint32_t WakeUpFlag=0, PullUpGPIOA;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -184,7 +183,7 @@ void loop(void)
 		handleAckData(AckMessage, &AckSize, &gwAckData);
 	}
 #endif
-  	enterLowPower(LOW_POWER_MODE, inactiveDuration);
+  	enterLowPower(LOW_POWER_MODE);
 }
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -256,7 +255,7 @@ void GotoLowPower(uint32_t LowPowerMode) {
 		HAL_ResumeTick();
 	}
 }
-uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
+uint32_t enterLowPower(uint32_t mode) {
 	tm time, alarm;
 	//getRTCDateTime(&time);
 	//getNextAlarm(&alarm, time);
