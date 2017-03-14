@@ -45,7 +45,6 @@ float Temp = NAN;
 float Hum = NAN;
 float Vbat=0;
 int loraMode = LORAMODE;
-uint32_t seq = 0;
 uint32_t WakeUpFlag=0, PullUpGPIOA;
 
 
@@ -108,7 +107,6 @@ void loop(void)
 {
 	uint32_t r_size;
 	uint16_t VbatADC;
-	int ret;
 	uint8_t message[100]={0}, AckMessage[100]={0};
 	AckData_t gwAckData;
 	uint8_t AckSize;
@@ -158,7 +156,7 @@ void loop(void)
     message[r_size]='\r';
     message[r_size+1]='\n';
 #ifdef DEBUG_HIVETRONIC
-    	printf("Message (l=%d) : %s\r\n", (int)r_size,message);
+    	printf("Message (l=%d) : %s", (int)r_size,message);
 #endif /* DEBUG_HIVETRONIC*/
 
 #ifdef LORA_ENABLED
