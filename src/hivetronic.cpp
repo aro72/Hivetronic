@@ -47,6 +47,8 @@ float Temp = NAN;
 float Hum = NAN;
 Weight_t Weight;
 float Vbat=0;
+tm currentTime;
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Setup function
@@ -111,7 +113,6 @@ void loop(void)
 	uint8_t message[100]={0}, AckMessage[100]={0};
 	AckData_t gwAckData;
 	uint8_t AckSize;
-	tm time;
 	char cDateTime[26];
 
 	/* measure weight, temperature/humidity, Vbat */
@@ -130,14 +131,14 @@ void loop(void)
 	* recording of a fixed weight at different temperature is not available
 	*/
 	// adjustWeight(&Weight, Temp);
-	getRTCDateTime(&time);
+	getRTCDateTime(&currentTime);
 	sprintf(cDateTime, "%02d/%02d/%4d;%02d:%02d:%02d",
-			time.tm_mday,
-			time.tm_mon+1,
-			(time.tm_year+1900),
-			time.tm_hour,
-			time.tm_min,
-			time.tm_sec);
+			currentTime.tm_mday,
+			currentTime.tm_mon+1,
+			(currentTime.tm_year+1900),
+			currentTime.tm_hour,
+			currentTime.tm_min,
+			currentTime.tm_sec);
    	String strTime(cDateTime);
    	String strVbat(Vbat,3);
    	String strT(Temp, 2);
@@ -257,8 +258,9 @@ void GotoLowPower(uint32_t LowPowerMode) {
 }
 uint32_t enterLowPower(uint32_t mode, uint32_t duration) {
 	tm time, alarm;
-	getRTCDateTime(&time);
-	getNextAlarm(&alarm, time);
+	//getRTCDateTime(&time);
+	//getNextAlarm(&alarm, time);
+	getNextAlarm(&alarm, currentTime);
 	//addDateTime(&alarm, time, duration);
 #ifdef DEBUG_HIVETRONIC
 	printf("Alarm set: %02d:%02d:%02d\r\n", alarm.tm_hour, alarm.tm_min, alarm.tm_sec);
@@ -626,7 +628,17 @@ uint32_t handleAckData(uint8_t *AckMessage, uint8_t *AckSize, AckData_t *gwAckDa
     				time.tm_year=AckMessage[i+5]-100;
     				time.tm_wday=AckMessage[i+6];
     				i+=7;
-    				setRTCDateTime(time);
+    				// Check correctness of received date from gateway
+    				if ((time.tm_year-currentTime.tm_year<2) &&
+    					(time.tm_mon-currentTime.tm_mon<2) &&
+    					(time.tm_mday-currentTime.tm_mday<2) &&
+    					(time.tm_hour-currentTime.tm_hour<2) &&
+    					(time.tm_min-currentTime.tm_min<2)) {
+    					setRTCDateTime(time);
+    					currentTime.tm_hour = time.tm_hour;
+    					currentTime.tm_min = time.tm_min;
+    					currentTime.tm_sec = time.tm_sec;
+    				}
     			}
 			} while (i<*AckSize);
     	}
