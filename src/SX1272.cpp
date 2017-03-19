@@ -201,7 +201,7 @@ SX1272::SX1272()
     digitalWrite(SX1272_RST,LOW);
     delay(500);
     */
-    delay(1);
+    //delay(1);
     pinMode(SX1272_RST, INPUT_PULLUP);
     /* ARO
     delay(500);

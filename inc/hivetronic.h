@@ -50,7 +50,8 @@
 #define HX711_PD_SCK1 		8
 #define DHTPIN 				9
 #define DBG1				14 /* PB8 */
-#define DBG2				15 /* PB9 */
+//#define DBG2				15 /* PB9 */
+#define DHTPIN_EXT			2
 #define LoRa_NSS			10
 #define LoRa_RST			A0
 #define VBAT_DIV3			A5 /* PC0 */
@@ -84,10 +85,10 @@
 // OTHER DEFINES
 #define DHTTYPE 				DHT22
 /* Calibration at 21.15C  */
-#define ADC_OFFSET_FRONT_LEFT 	-166500
-#define ADC_OFFSET_FRONT_RIGHT 	80955
-#define ADC_OFFSET_REAR_LEFT 	-39330
-#define ADC_OFFSET_REAR_RIGHT 	155070
+#define ADC_OFFSET_FRONT_LEFT 	-161595
+#define ADC_OFFSET_FRONT_RIGHT 	82035
+#define ADC_OFFSET_REAR_LEFT 	158490
+#define ADC_OFFSET_REAR_RIGHT 	-38970
 #define ADC_CAL_TEMP			20.2
 #define ADC_SCALE 				45
 /*
@@ -112,7 +113,7 @@
 #define NIGHTTIME_REPORTING		1800 /* in seconds */
 #endif /* FAST_REPORTING */
 
-#define PWR_GPIOA_PULLUP 	(PWR_GPIO_BIT_15|PWR_GPIO_BIT_13|PWR_GPIO_BIT_12|PWR_GPIO_BIT_11|PWR_GPIO_BIT_0)
+#define PWR_GPIOA_PULLUP 	(PWR_GPIO_BIT_15|PWR_GPIO_BIT_13|PWR_GPIO_BIT_12|PWR_GPIO_BIT_11|PWR_GPIO_BIT_10|PWR_GPIO_BIT_0)
 #define PWR_GPIOB_PULLUP 	(PWR_GPIO_BIT_15|PWR_GPIO_BIT_14|PWR_GPIO_BIT_13|PWR_GPIO_BIT_12|PWR_GPIO_BIT_11|PWR_GPIO_BIT_2|PWR_GPIO_BIT_1)
 #define PWR_GPIOC_PULLUP 	(PWR_GPIO_BIT_15|PWR_GPIO_BIT_14|PWR_GPIO_BIT_12|PWR_GPIO_BIT_10|PWR_GPIO_BIT_8|PWR_GPIO_BIT_6|PWR_GPIO_BIT_4|PWR_GPIO_BIT_3|PWR_GPIO_BIT_2)
 #define PWR_GPIOC_PULLDOWN 	(PWR_GPIO_BIT_13|PWR_GPIO_BIT_5)
@@ -264,6 +265,7 @@ uint32_t initDHT(void);
 uint32_t initADC(void);
 uint32_t initLoRa(void);
 uint32_t measureTempHum(float* T, float* H);
+uint32_t measureTempHumExt(float* T, float* H);
 uint32_t measureHX711(Weight_t* Weight);
 uint32_t adjustWeight(Weight_t* Weight, float T);
 uint32_t handleAckData(uint8_t *AckMessage, uint8_t *AckSize, AckData_t *gwAckData);

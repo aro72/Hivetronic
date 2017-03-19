@@ -36,6 +36,7 @@
 // GLOBAL VARIABLES
 
 DHT dht(DHTPIN, DHTTYPE);
+DHT dht_ext(DHTPIN_EXT, DHTTYPE);
 HX711 adcFrontLeft, adcFrontRight, adcRearLeft, adcRearRight;
 ADC_HandleTypeDef hadc1;
 RTC_HandleTypeDef hrtc;
@@ -43,6 +44,8 @@ Weight_t Weight;
 tm currentTime;
 float Temp = NAN;
 float Hum = NAN;
+float Temp_ext = NAN;
+float Hum_ext = NAN;
 float Vbat=0;
 int loraMode = LORAMODE;
 uint32_t WakeUpFlag=0, PullUpGPIOA;
@@ -75,6 +78,8 @@ void setup() {
 	pinMode(LoRa_RST, OUTPUT);
 	digitalWrite(LoRa_NSS, HIGH);
 	digitalWrite(LoRa_RST, LOW);
+	pinMode(DHTPIN_EXT, INPUT_PULLUP);
+
 	// set debug pin
 	//pinMode(DBG1, OUTPUT);
 	//pinMode(DBG2, OUTPUT);
@@ -105,7 +110,7 @@ void setup() {
 
 void loop(void)
 {
-	uint32_t r_size;
+	uint32_t r_size, ret;
 	uint16_t VbatADC;
 	uint8_t message[100]={0}, AckMessage[100]={0};
 	AckData_t gwAckData;
@@ -115,8 +120,10 @@ void loop(void)
 	/* measure weight, temperature/humidity, Vbat */
   	//measureTempHum(&Temp, &Hum); /* must be done at least 1s after power-up */
   	measureVbat(&VbatADC); /* VbatADC = Vbat/3 */
-	Vbat = 3*3.3*VbatADC/4095; /* 12-bit resolution, Vref+=3.3V */
+	//Vbat = 3*3.3*VbatADC/4095; /* 12-bit resolution, Vref+=3.3V */
+	Vbat = 10.31*VbatADC/4095; /* 12-bit resolution, Vref+=3.3V */
   	measureHX711(&Weight);
+  	measureTempHumExt(&Temp_ext, &Hum_ext); /* must be done at least 1s after power-up */
   	measureTempHum(&Temp, &Hum); /* must be done at least 1s after power-up */
 
 #ifdef DEBUG_HIVETRONIC
@@ -626,11 +633,12 @@ uint32_t handleAckData(uint8_t *AckMessage, uint8_t *AckSize, AckData_t *gwAckDa
     				time.tm_wday=AckMessage[i+6];
     				i+=7;
     				// Check correctness of received date from gateway
-    				if ((time.tm_year-currentTime.tm_year<2) &&
+    				if ((currentTime.tm_year<2016) ||
+    					((time.tm_year-currentTime.tm_year<2) &&
     					(time.tm_mon-currentTime.tm_mon<2) &&
     					(time.tm_mday-currentTime.tm_mday<2) &&
     					(time.tm_hour-currentTime.tm_hour<2) &&
-    					(time.tm_min-currentTime.tm_min<2)) {
+    					(time.tm_min-currentTime.tm_min<2))) {
     					setRTCDateTime(time);
     					currentTime.tm_hour = time.tm_hour;
     					currentTime.tm_min = time.tm_min;
@@ -799,8 +807,33 @@ uint32_t measureTempHum(float* T, float* H) {
 	}
 	*T = t;
 	*H = h;
-#ifdef DEBUG_HIVETRONIC_N
+#ifdef DEBUG_HIVETRONIC
 	printf("DHT22: %3.1f°C - %3.1f%%\r\n", *T, *H);
+#endif /* DEBUG_HIVETRONIC*/
+	return ret;
+}
+
+uint32_t measureTempHumExt(float* T, float* H) {
+	float t=0, h=0;
+	uint32_t ret=NO_ERROR;
+	// Reading temperature or humidity takes about 250 milliseconds!
+	// Sensor readings may also be up to 2 seconds 'old' (its a very slow sensor)
+	h = dht_ext.readHumidity();
+	// Read temperature as Celsius (the default)
+	t = dht_ext.readTemperature();
+	// Check if any reads failed and exit early (to try again).
+	if (isnan(h) || isnan(t)) {
+#ifdef DEBUG_HIVETRONIC
+		printf("Failed to read from DHT sensor!\r\n");
+#endif /* DEBUG_HIVETRONIC*/
+		h=0;
+		t=0;
+		ret=ERROR_DHT_FAILED;
+	}
+	*T = t;
+	*H = h;
+#ifdef DEBUG_HIVETRONIC
+	printf("DHT22_ext: %3.1f°C - %3.1f%%\r\n", t, h);
 #endif /* DEBUG_HIVETRONIC*/
 	return ret;
 }
@@ -808,6 +841,7 @@ uint32_t measureTempHum(float* T, float* H) {
 uint32_t initDHT(void) {
 	Wire.begin();
 	dht.begin();
+	dht_ext.begin();
 	return NO_ERROR;
 }
 
@@ -964,11 +998,11 @@ uint32_t initLoRa(void) {
 #endif /* DEBUG_HIVETRONIC*/
 	// Set the node address and print the result
 	ret = sx1272.setNodeAddress(LORA_NODE_ADDR);
-#ifdef DEBUG_HIVETRONIC
-	//printf("Setting node addr: state %d\r\n", ret);
+#ifdef DEBUG_HIVETRONIC_N
+	printf("Setting node addr: state %d\r\n", ret);
 	//printf("SX1272/76 successfully configured\r\n");
 #endif /* DEBUG_HIVETRONIC*/
-	return NO_ERROR;
+	return ret;
 }
 
 void Error_Handler(uint32_t error_code) {
