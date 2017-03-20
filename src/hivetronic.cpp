@@ -1020,12 +1020,20 @@ void WakeUp() {
 void initGPIO(void) {
   	GPIO_InitTypeDef GPIO_InitStruct;
 	__HAL_RCC_GPIOC_CLK_ENABLE();
-  	/*Configure GPIO pins : PA8 PA9 PA10 */
+  	/* PC0 used for Vbat measurement */
   	GPIO_InitStruct.Pin = GPIO_PIN_0;
   	GPIO_InitStruct.Mode = GPIO_MODE_ANALOG_ADC_CONTROL;
   	GPIO_InitStruct.Pull = GPIO_NOPULL;
   	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+  	/* PB9 used for secondary DHT22 1-wire line */
+  	GPIO_InitStruct.Pin = GPIO_PIN_9;
+  	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+  	//GPIO_InitStruct.Pull = GPIO_PULLUP;
+  	GPIO_InitStruct.Pull = GPIO_NOPULL;
+  	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+  	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  	/*Configure GPIO pins : PA8 PA9 PA10 */
 	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_A, PWR_GPIOA_PULLUP);
 	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_B, PWR_GPIOB_PULLUP);
 	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_C, PWR_GPIOC_PULLUP);
