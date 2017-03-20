@@ -106,8 +106,8 @@
 
 #define WAKEUP_ALIGN			1 /* in minute */
 #ifdef FAST_REPORTING
-#define DAYTIME_REPORTING		20  /* in seconds */
-#define NIGHTTIME_REPORTING		30 /* in seconds */
+#define DAYTIME_REPORTING		20  /* in seconds, <60 */
+#define NIGHTTIME_REPORTING		30 /* in seconds, <60 */
 #else
 #define DAYTIME_REPORTING		600  /* in seconds */
 #define NIGHTTIME_REPORTING		1800 /* in seconds */
@@ -280,7 +280,7 @@ uint32_t addDateTime(tm* endtime, tm starttime, uint32_t duration);
 uint32_t setAlarm(tm alrm);
 void GotoLowPower(uint32_t LowPowerMode);
 void Error_Handler(uint32_t error_code);
-uint32_t measureVbat(uint16_t *VbatADC);
+uint32_t measureVbat(float *VbatADC);
 uint32_t getNextAlarm(tm* alarm, tm time);
 void MX_ADC1_Init(void);
 void initGPIO(void);

@@ -48,7 +48,6 @@ float Temp_ext = NAN;
 float Hum_ext = NAN;
 float Vbat=0;
 int loraMode = LORAMODE;
-uint32_t WakeUpFlag=0, PullUpGPIOA;
 
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -87,13 +86,6 @@ void setup() {
 #ifdef DEBUG_HIVETRONIC
 	// Print a start message
 	printf("\n\n\r");
-	/*
-	if (WakeUpFlag==0) {
-		printf("... Wake-up from Shutdown\r\n");
-	} else {
-		printf("... Wake-up from Standby\r\n");
-	}
-	*/
 	printf("//////////////////////////\r\n");
 	//printf("ARM (STM32)\r\n");
 #endif /* DEBUG_HIVETRONIC */
@@ -111,7 +103,7 @@ void setup() {
 void loop(void)
 {
 	uint32_t r_size, ret;
-	uint16_t VbatADC;
+	//uint16_t VbatADC;
 	uint8_t message[100]={0}, AckMessage[100]={0};
 	AckData_t gwAckData;
 	uint8_t AckSize;
@@ -119,9 +111,7 @@ void loop(void)
 
 	/* measure weight, temperature/humidity, Vbat */
   	//measureTempHum(&Temp, &Hum); /* must be done at least 1s after power-up */
-  	measureVbat(&VbatADC); /* VbatADC = Vbat/3 */
-	//Vbat = 3*3.3*VbatADC/4095; /* 12-bit resolution, Vref+=3.3V */
-	Vbat = 10.31*VbatADC/4095; /* 12-bit resolution, Vref+=3.3V */
+  	measureVbat(&Vbat); /* VbatADC = Vbat/3 */
   	measureHX711(&Weight);
   	measureTempHumExt(&Temp_ext, &Hum_ext); /* must be done at least 1s after power-up */
   	measureTempHum(&Temp, &Hum); /* must be done at least 1s after power-up */
@@ -134,7 +124,7 @@ void loop(void)
 	* remove temp adjustment as long as calibration and
 	* recording of a fixed weight at different temperature is not available
 	*/
-	// adjustWeight(&Weight, Temp);
+	adjustWeight(&Weight, Temp);
 	getRTCDateTime(&currentTime);
 	sprintf(cDateTime, "%02d/%02d/%4d;%02d:%02d:%02d",
 			currentTime.tm_mday,
@@ -234,7 +224,6 @@ void GotoLowPower(uint32_t LowPowerMode) {
 		HAL_RCC_OscConfig(&LowPowerOscConfig); /* Configure clocks */
 
 		/* Enter low power mode */
-		WakeUpFlag = 0;
 		switch (LowPowerMode) {
 		case PM_STOP2:
 			HAL_PWREx_EnterSTOP2Mode(PWR_STOPENTRY_WFI);
@@ -262,10 +251,7 @@ void GotoLowPower(uint32_t LowPowerMode) {
 }
 uint32_t enterLowPower(uint32_t mode) {
 	tm time, alarm;
-	//getRTCDateTime(&time);
-	//getNextAlarm(&alarm, time);
 	getNextAlarm(&alarm, currentTime);
-	//addDateTime(&alarm, time, duration);
 #ifdef DEBUG_HIVETRONIC
 	printf("Alarm set: %02d:%02d:%02d\r\n", alarm.tm_hour, alarm.tm_min, alarm.tm_sec);
 	printf("Low Power entry ...\r\n");
@@ -373,9 +359,12 @@ uint32_t getNextAlarm(tm* alarm, tm time) {
 	memcpy(&previous_alarm, &time, sizeof(tm));
 	previous_alarm.tm_sec = 0;
 	addDateTime(alarm, previous_alarm, reporting_period);
-	alarm->tm_min = alarm->tm_min | WAKEUP_ALIGN;
+	alarm->tm_min -= alarm->tm_min%reporting_period;
+	alarm->tm_min += alarm->tm_min+WAKEUP_ALIGN;
 #else /* FAST_REPORTING*/
 	addDateTime(alarm, time, reporting_period);
+	alarm->tm_sec -= alarm->tm_sec%reporting_period;
+	alarm->tm_sec += alarm->tm_sec+WAKEUP_ALIGN;
 #endif /* FAST_REPORTING */
 	return NO_ERROR;
 }
@@ -1016,32 +1005,16 @@ void Error_Handler(uint32_t error_code) {
 }
 
 void WakeUp() {
-	if (LL_PWR_IsActiveFlag_SB()) {
-		LL_PWR_ClearFlag_SB();
-		WakeUpFlag |= 1;
-	}
-	if (LL_PWR_IsActiveFlag_InternWU()) {
-		WakeUpFlag |= 2;
-	}
 	/* Get the pending status of the AlarmA Interrupt */
 	if(__HAL_RTC_ALARM_GET_FLAG(&hrtc, RTC_FLAG_ALRAF) != RESET) {
 	  /* AlarmA callback */
 #ifdef DEBUG_HIVETRONIC_N
-	  printf("AlarmA IT flag at wake-up\r\n");
+		printf("AlarmA IT flag at wake-up\r\n");
 #endif /* DEBUG_HIVETRONIC*/
-	  /* Clear the AlarmA interrupt pending bit */
-	  __HAL_RTC_ALARM_CLEAR_FLAG(&hrtc, RTC_FLAG_ALRAF);
-	 }
-	__HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
-	PullUpGPIOA = LL_PWR_ReadReg(PUCRA);
-#ifdef DEBUG_HIVETRONIC_N
-	if (WakeUpFlag==0) {
-		printf("... Wake-up from Shutdown\r\n");
-	} else {
-		//printf("PU %ld -  WU %ld", PullUpGPIOA, WakeUpFlag);
-		printf("... Wake-up\r\n");
+	  	/* Clear the AlarmA interrupt pending bit */
+	  	__HAL_RTC_ALARM_CLEAR_FLAG(&hrtc, RTC_FLAG_ALRAF);
 	}
-#endif /* DEBUG_HIVETRONIC*/
+	__HAL_RTC_ALARM_EXTI_CLEAR_FLAG();
 }
 
 void initGPIO(void) {
@@ -1124,7 +1097,7 @@ void MX_ADC1_Init(void)
 
 }
 
-uint32_t measureVbat(uint16_t *VbatADC) {
+uint32_t measureVbat(float *Vbat) {
   uint16_t ADCvalue;
   if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) !=  HAL_OK)
   {
@@ -1147,10 +1120,12 @@ uint32_t measureVbat(uint16_t *VbatADC) {
   }
   ADCvalue = HAL_ADC_GetValue(&hadc1);
   HAL_ADC_Stop(&hadc1);
-  *VbatADC = ADCvalue;
-#ifdef DEBUG_HIVETRONIC
-	printf("ADC raw = %ld\r\n", *VbatADC);
+  *Vbat = ADCvalue;
+#ifdef DEBUG_HIVETRONIC_N
+	printf("ADC raw = %ld\r\n", ADCvalue);
 #endif
+  /* 12-bit resolution, Vref+=3.3V but corrected to compensate inaccuracy of resistors of bridge */
+  *Vbat = 10.31*(*Vbat/4095);
   return NO_ERROR;
 }
 
