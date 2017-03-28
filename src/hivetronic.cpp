@@ -22,7 +22,7 @@
 
 ///////////////////////////////////////////////////////////////////////////////////////////////////////////
 // INCLUDES
-#define FAST_REPORTING
+#define FAST_REPORTING_N
 #include "hivetronic.h"
 
 
@@ -108,12 +108,19 @@ void loop(void)
 	AckData_t gwAckData;
 	uint8_t AckSize;
 	char cDateTime[26];
-
+	char cVbat[8];
+	char cTemp[8];
+	char cHum[8];
+   	char cWeigthFL[10];
+   	char cWeigthFR[10];
+   	char cWeigthRL[10];
+   	char cWeigthRR[10];
+   	char cWeigthTotal[16];
 	/* measure weight, temperature/humidity, Vbat */
   	//measureTempHum(&Temp, &Hum); /* must be done at least 1s after power-up */
   	measureVbat(&Vbat); /* VbatADC = Vbat/3 */
   	measureHX711(&Weight);
-  	measureTempHumExt(&Temp_ext, &Hum_ext); /* must be done at least 1s after power-up */
+  	//measureTempHumExt(&Temp_ext, &Hum_ext); /* must be done at least 1s after power-up */
   	measureTempHum(&Temp, &Hum); /* must be done at least 1s after power-up */
 
 #ifdef DEBUG_HIVETRONIC
@@ -134,17 +141,25 @@ void loop(void)
 			currentTime.tm_min,
 			currentTime.tm_sec);
    	String strTime(cDateTime);
-   	String strVbat(Vbat,3);
-   	String strT(Temp, 2);
-   	String strH(Hum, 2);
-   	String strWeightFL(Weight.FrontLeft, 3);
-   	String strWeightFR(Weight.FrontRight, 3);
-   	String strWeightRL(Weight.RearLeft, 3);
-   	String strWeightRR(Weight.RearRight, 3);
-   	String strWeightTotal(Weight.Total, 3);
+   	sprintf(cVbat, "%1.3f", Vbat);   	
+   	String strVbat(cVbat);
+   	sprintf(cTemp, "%.2f", Temp);   	
+   	String strT(cTemp);
+   	sprintf(cHum, "%.2f", Hum);   	
+   	String strH(cHum);
+   	sprintf(cWeigthFL,"%.2f",Weight.FrontLeft);
+   	sprintf(cWeigthFR,"%.2f",Weight.FrontRight);
+   	sprintf(cWeigthRL,"%.2f",Weight.RearLeft);
+   	sprintf(cWeigthRR,"%.2f",Weight.RearRight);
+   	sprintf(cWeigthTotal,"%.2f",Weight.Total);
+   	String strWeightFL(cWeigthFL);
+   	String strWeightFR(cWeigthFR);
+   	String strWeightRL(cWeigthRL);
+   	String strWeightRR(cWeigthRR);
+   	String strWeightTotal(cWeigthTotal);
+
    	String messageData;
 
-    //messageData = strTime + " - Vbat " + strVbat + " - T " + strT + " - H " + strH + " - FL " + strWeightFL + " - FR " + strWeightFR + " - RL " + strWeightRL + " - RR " + strWeightRR + " - W " + strWeightTotal + "\0";
     messageData = strTime + ";" + strVbat + ";" + strT + ";" + strH + ";" + strWeightFL + ";" + strWeightFR + ";" + strWeightRL + ";" + strWeightRR + ";" + strWeightTotal + "\0";
    	r_size = strlen(messageData.c_str());
     for (uint32_t i = 0; i < r_size; i++) {
@@ -359,18 +374,20 @@ uint32_t getNextAlarm(tm* alarm, tm time) {
 	memcpy(&previous_alarm, &time, sizeof(tm));
 	previous_alarm.tm_sec = 0;
 	addDateTime(alarm, previous_alarm, reporting_period);
-	alarm->tm_min -= alarm->tm_min%reporting_period;
-	alarm->tm_min += alarm->tm_min+WAKEUP_ALIGN;
+	subDateTime(alarm, *alarm, alarm->tm_sec%reporting_period);
+	addDateTime(alarm, *alarm, WAKEUP_ALIGN);
 #else /* FAST_REPORTING*/
 	addDateTime(alarm, time, reporting_period);
-	alarm->tm_sec -= alarm->tm_sec%reporting_period;
-	alarm->tm_sec += alarm->tm_sec+WAKEUP_ALIGN;
+	subDateTime(alarm, *alarm, alarm->tm_sec%reporting_period);
+	addDateTime(alarm, *alarm, WAKEUP_ALIGN);
+
 #endif /* FAST_REPORTING */
 	return NO_ERROR;
 }
 
 uint32_t addDateTime(tm* endtime, tm starttime, uint32_t duration) {
 	/* duration is in seconds */
+	/* NOTE: Date is not updated - only time is calculated */
 	uint32_t hour, min, sec, carry;
 	hour = (uint32_t) (duration/3600);
 	min = (uint32_t) ((duration/60)%60);
@@ -378,26 +395,47 @@ uint32_t addDateTime(tm* endtime, tm starttime, uint32_t duration) {
 	endtime->tm_sec = starttime.tm_sec + sec;
 	carry = 0;
 	if (endtime->tm_sec>59) {
-		// add one minute
 		endtime->tm_sec = endtime->tm_sec-60;
 		carry=1;
 	}
 	endtime->tm_min = starttime.tm_min + min + carry;
 	carry = 0;
 	if (endtime->tm_min>59) {
-		// add one minute
 		endtime->tm_min = endtime->tm_min-60;
 		carry=1;
 	}
 	endtime->tm_hour = starttime.tm_hour + hour + carry;
 	if (endtime->tm_hour>23) {
-		// add one minute
 		endtime->tm_hour = endtime->tm_hour-24;
-		// carry=1;
 	}
 	return NO_ERROR;
 }
 
+uint32_t subDateTime(tm* endtime, tm starttime, uint32_t duration) {
+	/* duration is in seconds */
+	/* NOTE: Date is not updated - only time is calculated */
+	uint32_t hour, min, sec, carry;
+	hour = (uint32_t) (duration/3600);
+	min = (uint32_t) ((duration/60)%60);
+	sec = (uint32_t) (duration%60);
+	endtime->tm_sec = starttime.tm_sec - sec;
+	carry = 0;
+	if (endtime->tm_sec<0) {
+		endtime->tm_sec = endtime->tm_sec+60;
+		carry=1;
+	}
+	endtime->tm_min = starttime.tm_min - min - carry;
+	carry = 0;
+	if (endtime->tm_min<0) {
+		endtime->tm_min = endtime->tm_min+60;
+		carry=1;
+	}
+	endtime->tm_hour = starttime.tm_hour + hour + carry;
+	if (endtime->tm_hour<0) {
+		endtime->tm_hour = endtime->tm_hour+24;
+	}
+	return NO_ERROR;
+}
 uint32_t setAlarm(tm alrm) {
 	uint8_t st, su, mnt, mnu, ht, hu;
 	//uint8_t dt, du, mt, mu, wdu, yt, yu;
@@ -1027,12 +1065,12 @@ void initGPIO(void) {
   	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   	HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
   	/* PB9 used for secondary DHT22 1-wire line */
-  	GPIO_InitStruct.Pin = GPIO_PIN_9;
+  	GPIO_InitStruct.Pin = GPIO_PIN_10;
   	GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   	//GPIO_InitStruct.Pull = GPIO_PULLUP;
   	GPIO_InitStruct.Pull = GPIO_NOPULL;
   	GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  	HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+  	HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
   	/*Configure GPIO pins : PA8 PA9 PA10 */
 	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_A, PWR_GPIOA_PULLUP);
 	HAL_PWREx_EnableGPIOPullUp(PWR_GPIO_B, PWR_GPIOB_PULLUP);

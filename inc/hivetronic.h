@@ -104,13 +104,14 @@
 #define ACK_NTP_CODE			0x01
 //#define ACK_PERIOD_CODE			0x02
 
-#define WAKEUP_ALIGN			1 /* in minute */
 #ifdef FAST_REPORTING
 #define DAYTIME_REPORTING		20  /* in seconds, <60 */
 #define NIGHTTIME_REPORTING		30 /* in seconds, <60 */
+#define WAKEUP_ALIGN			1 /* in seconds */
 #else
 #define DAYTIME_REPORTING		600  /* in seconds */
 #define NIGHTTIME_REPORTING		1800 /* in seconds */
+#define WAKEUP_ALIGN			60 /* in seconds */
 #endif /* FAST_REPORTING */
 
 #define PWR_GPIOA_PULLUP 	(PWR_GPIO_BIT_15|PWR_GPIO_BIT_13|PWR_GPIO_BIT_12|PWR_GPIO_BIT_11|PWR_GPIO_BIT_10|PWR_GPIO_BIT_0)
@@ -277,6 +278,7 @@ uint32_t getRTCDateTime(tm* time);
 uint32_t configureClock(void);
 uint32_t enterLowPower(uint32_t mode);
 uint32_t addDateTime(tm* endtime, tm starttime, uint32_t duration);
+uint32_t subDateTime(tm* endtime, tm starttime, uint32_t duration);
 uint32_t setAlarm(tm alrm);
 void GotoLowPower(uint32_t LowPowerMode);
 void Error_Handler(uint32_t error_code);
